@@ -1,1 +1,1 @@
-Nothing should be ignored based on the provided file changes. The modification of 'gs/Database.gs' represents a source code file change, which does not necessitate adding any entries to the .gitignore file. Therefore, no .gitignore content is outputted.
+(js/shift-schedule.js)
