@@ -22,11 +22,21 @@ const adminEmployees = {
             return;
         }
 
+        // Load employees first, then populate filters
+        loadingIndicator.show('Memuat data karyawan...');
         await this.loadEmployees();
+        
+        // Populate department filter AFTER employees are loaded
+        const deptFilter = document.getElementById('dept-filter');
+        if (deptFilter) {
+            await departmentManager.populateSelects('dept-filter');
+        }
+        
         this.bindEvents();
         this.renderTable();
         this.renderMobileCards();
         this.updatePaginationInfo();
+        loadingIndicator.hide();
     },
 
     async loadEmployees() {
@@ -55,6 +65,7 @@ const adminEmployees = {
         // Department filter
         const deptFilter = document.getElementById('dept-filter');
         if (deptFilter) {
+            // Options already populated in init(), just bind event
             deptFilter.addEventListener('change', (e) => {
                 this.filters.department = e.target.value;
                 this.currentPage = 1;
@@ -274,9 +285,14 @@ const adminEmployees = {
         return labels[status] || status;
     },
 
-    showAddModal() {
+    async showAddModal() {
         const modal = document.getElementById('modal-add-employee');
         if (modal) {
+            // Populate department datalist dynamically BEFORE showing modal
+            console.log('[showAddModal] Memulai populate dept-list');
+            await departmentManager.populateSelects('dept-list');
+            console.log('[showAddModal] Selesai populate dept-list, cache:', departmentManager.cache);
+            
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             this.isSubmitting = false;
@@ -347,7 +363,9 @@ const adminEmployees = {
         const employeeData = { name, email, password, department, position, shift, status, joinDate };
 
         try {
+            loadingIndicator.show('Menyimpan data karyawan...');
             const result = await api.addEmployee(employeeData);
+            loadingIndicator.hide();
             if (result && result.success) {
                 this.employees.unshift(result.data);
                 this.updateDeptFilterOptions(department);
@@ -360,6 +378,7 @@ const adminEmployees = {
                 toast.error(result?.error || 'Gagal menambahkan karyawan');
             }
         } catch (error) {
+            loadingIndicator.hide();
             console.error('Error adding employee:', error);
             toast.error('Terjadi kesalahan');
         } finally {
@@ -402,7 +421,7 @@ const adminEmployees = {
         }
     },
 
-    editEmployee(id) {
+    async editEmployee(id) {
         const emp = this.employees.find(e => e.id == id);
         if (!emp) {
             toast.error('Data karyawan tidak ditemukan');
@@ -411,7 +430,6 @@ const adminEmployees = {
         this.currentEditId = id;
         document.getElementById('edit-emp-name').value = emp.name;
         document.getElementById('edit-emp-email').value = emp.email;
-        document.getElementById('edit-emp-department').value = emp.department;
         document.getElementById('edit-emp-position').value = emp.position;
         document.getElementById('edit-emp-shift').value = emp.shift;
         document.getElementById('edit-emp-status').value = emp.status;
@@ -419,6 +437,19 @@ const adminEmployees = {
         // Kosongkan field password
         document.getElementById('edit-emp-password').value = '';
         document.getElementById('edit-emp-confirm-password').value = '';
+        
+        // Populate department datalist dynamically and set current value AFTER populating
+        console.log('[editEmployee] Memulai populate dept-list-edit untuk:', emp.department);
+        await departmentManager.populateSelects('dept-list-edit', emp.department);
+        console.log('[editEmployee] Selesai populate, cache:', departmentManager.cache);
+        
+        // Set nilai departemen setelah datalist terisi
+        const deptInput = document.getElementById('edit-emp-department');
+        if (deptInput && emp.department) {
+            deptInput.value = emp.department;
+            console.log('[editEmployee] Nilai departemen diset ke:', emp.department);
+        }
+        
         const modal = document.getElementById('modal-edit-employee');
         if (modal) {
             modal.style.display = 'flex';
@@ -464,7 +495,9 @@ const adminEmployees = {
         }
 
         try {
+            loadingIndicator.show('Memperbarui data karyawan...');
             const result = await api.updateEmployee(this.currentEditId, updateData);
+            loadingIndicator.hide();
             if (result && result.success) {
                 const index = this.employees.findIndex(e => e.id == this.currentEditId);
                 if (index !== -1) {
@@ -479,6 +512,7 @@ const adminEmployees = {
                 toast.error(result?.error || 'Gagal memperbarui karyawan');
             }
         } catch (error) {
+            loadingIndicator.hide();
             console.error('Error updating employee:', error);
             toast.error('Terjadi kesalahan');
         }
@@ -487,13 +521,16 @@ const adminEmployees = {
     async deleteEmployee(id) {
         if (confirm('Apakah Anda yakin ingin menghapus karyawan ini?')) {
             try {
+                loadingIndicator.show('Menghapus karyawan...');
                 await api.deleteEmployee(id);
+                loadingIndicator.hide();
                 this.employees = this.employees.filter(e => e.id != id);
                 this.renderTable();
                 this.renderMobileCards();
                 this.updatePaginationInfo();
                 toast.success('Karyawan berhasil dihapus');
             } catch (error) {
+                loadingIndicator.hide();
                 console.error('Error deleting employee:', error);
                 toast.error('Gagal menghapus karyawan');
             }

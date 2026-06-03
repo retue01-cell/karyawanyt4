@@ -392,3 +392,211 @@ window.formUtils = formUtils;
 window.animations = animations;
 window.updateCompanyUI = updateCompanyUI;
 window.onDOMReady = onDOMReady;
+
+// Loading Indicator Manager (Global)
+const loadingIndicator = {
+    element: null,
+    
+    init() {
+        this.element = document.getElementById('loading-indicator');
+    },
+    
+    show(message = 'Memproses data...') {
+        if (!this.element) this.init();
+        if (this.element) {
+            const span = this.element.querySelector('span');
+            if (span) span.textContent = message;
+            this.element.classList.add('active');
+        }
+    },
+    
+    hide() {
+        if (!this.element) this.init();
+        if (this.element) {
+            this.element.classList.remove('active');
+        }
+    }
+};
+
+window.loadingIndicator = loadingIndicator;
+
+// Department Manager (Global)
+const departmentManager = {
+    cache: [],
+    
+    /**
+     * Mengambil daftar departemen dari server dan menyimpannya di cache
+     * @returns {Promise<Array>} Array of department names
+     */
+    fetchDepartments() {
+        return new Promise((resolve, reject) => {
+            console.log('[fetchDepartments] Memulai fetch departemen dari server');
+            
+            // Tampilkan loading indicator saat fetch (opsional, bisa dimatikan jika mengganggu)
+            // if (window.loadingIndicator) {
+            //     window.loadingIndicator.show('Memuat departemen...');
+            // }
+            
+            google.script.run
+                .withSuccessHandler((departments) => {
+                    // if (window.loadingIndicator) {
+                    //     window.loadingIndicator.hide();
+                    // }
+                    
+                    console.log('[fetchDepartments] Berhasil menerima departemen:', departments);
+                    this.cache = departments || [];
+                    resolve(departments || []);
+                })
+                .withFailureHandler((error) => {
+                    // if (window.loadingIndicator) {
+                    //     window.loadingIndicator.hide();
+                    // }
+                    
+                    console.error('[fetchDepartments] Gagal mengambil departemen:', error);
+                    // Jangan tampilkan toast error, cukup log dan resolve dengan array kosong
+                    console.warn('[fetchDepartments] Menggunakan daftar departemen kosong karena error');
+                    this.cache = [];
+                    resolve([]); // Resolve dengan array kosong agar tidak reject
+                })
+                .getUniqueDepartments();
+        });
+    },
+    
+    /**
+     * Mengisi dropdown select atau datalist dengan daftar departemen
+     * @param {string|Array} selectors - ID elemen select/datalist atau array of IDs
+     * @param {string} currentValue - Nilai yang sedang dipilih (untuk edit mode)
+     */
+    async populateSelects(selectors, currentValue = '') {
+        const selects = Array.isArray(selectors) ? selectors : [selectors];
+        
+        console.log('[populateSelects] Memulai populate untuk:', selectors);
+        
+        // Pastikan elemen DOM sudah ada sebelum melanjutkan
+        for (const selectorId of selects) {
+            let attempts = 0;
+            while (!document.getElementById(selectorId) && attempts < 20) {
+                console.log('[populateSelects] Menunggu elemen', selectorId, 'ada di DOM...');
+                await new Promise(resolve => setTimeout(resolve, 150));
+                attempts++;
+            }
+            
+            if (!document.getElementById(selectorId)) {
+                console.error('[populateSelects] Elemen', selectorId, 'tidak ditemukan setelah 3 detik');
+                continue;
+            }
+        }
+        
+        // Selalu fetch data terbaru dari server untuk memastikan data sinkron
+        try {
+            const departments = await this.fetchDepartments();
+            console.log('[populateSelects] Data departemen diterima:', departments);
+            
+            if (!departments || departments.length === 0) {
+                console.warn('[populateSelects] Departemen kosong dari server');
+            }
+            
+            this._fillSelects(selects, currentValue);
+            console.log('[populateSelects] Selesai mengisi semua elemen');
+            return departments;
+        } catch (err) {
+            console.error('[populateSelects] Error fetching departments:', err);
+            // Tetap coba isi dengan cache atau default jika ada error
+            console.log('[populateSelects] Menggunakan fallback ke default departments');
+            this._fillSelects(selects, currentValue);
+            return [];
+        }
+    },
+    
+    /**
+     * Internal function untuk mengisi dropdown atau datalist
+     * @private
+     */
+    _fillSelects(selects, currentValue) {
+        console.log('[_fillSelects] Memulai pengisian elemen:', selects);
+        console.log('[_fillSelects] Cache departemen:', this.cache);
+        
+        const departmentsToUse = (!this.cache || this.cache.length === 0) 
+            ? ['IT', 'HR', 'Finance', 'Marketing', 'Operations'] 
+            : this.cache;
+        
+        console.log('[_fillSelects] Departemen yang akan digunakan:', departmentsToUse);
+        
+        selects.forEach(selectorId => {
+            const selectEl = document.getElementById(selectorId);
+            if (!selectEl) {
+                console.warn('[_fillSelects] Elemen tidak ditemukan:', selectorId);
+                return;
+            }
+            
+            console.log('[_fillSelects] Memproses elemen:', selectorId, 'Tag:', selectEl.tagName);
+            
+            // Cek apakah ini datalist atau select
+            if (selectEl.tagName.toLowerCase() === 'datalist') {
+                // Handle datalist
+                console.log('[_fillSelects] Mengisi datalist dengan', departmentsToUse.length, 'departemen');
+                selectEl.innerHTML = '';
+                
+                departmentsToUse.forEach(dept => {
+                    const opt = document.createElement('option');
+                    opt.value = dept;
+                    selectEl.add(opt);
+                });
+                
+                console.log('[_fillSelects] Datalist selesai diisi, total options:', selectEl.options.length);
+                console.log('[_fillSelects] Isi datalist:', Array.from(selectEl.options).map(o => o.value));
+            } else if (selectEl.tagName.toLowerCase() === 'select') {
+                // Handle select dropdown
+                console.log('[_fillSelects] Mengisi select dropdown dengan', departmentsToUse.length, 'departemen');
+                let firstOption = selectEl.options[0];
+                const isDefaultEmpty = firstOption && firstOption.value === '';
+                
+                // Reset opsi
+                selectEl.innerHTML = '';
+                
+                // Tambahkan kembali opsi default
+                if (isDefaultEmpty) {
+                    selectEl.add(firstOption);
+                } else {
+                    const defaultOpt = document.createElement('option');
+                    defaultOpt.value = '';
+                    defaultOpt.text = '-- Pilih Departemen --';
+                    selectEl.add(defaultOpt);
+                }
+                
+                // Isi dengan data departemen
+                departmentsToUse.forEach(dept => {
+                    const opt = document.createElement('option');
+                    opt.value = dept;
+                    opt.text = dept;
+                    selectEl.add(opt);
+                });
+                
+                // Set current value jika ada
+                if (currentValue && departmentsToUse.includes(currentValue)) {
+                    selectEl.value = currentValue;
+                }
+                
+                console.log('[_fillSelects] Select selesai diisi, total options:', selectEl.options.length);
+                console.log('[_fillSelects] Isi select:', Array.from(selectEl.options).map(o => o.value));
+            }
+        });
+    },
+    
+    /**
+     * Mendapatkan daftar departemen dari cache
+     * @returns {Array} Array of department names
+     */
+    getDepartments() {
+        return [...this.cache];
+    },
+    
+    /**
+     * Membersihkan cache (untuk refresh manual)
+     */
+    clearCache() {
+        this.cache = [];
+    }
+};
+
+window.departmentManager = departmentManager;

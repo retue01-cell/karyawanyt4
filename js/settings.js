@@ -13,7 +13,9 @@ const settings = {
             router.navigate('dashboard');
             return;
         }
+        loadingIndicator.show('Memuat pengaturan...');
         await this.loadSettings();
+        loadingIndicator.hide();
         this.initForms();
         this.renderShifts();
     },
@@ -76,7 +78,6 @@ const settings = {
                     }
                 });
                 console.log('[Settings] Applied workdays from DB:', workdays);
-                toast.success('Hari kerja dimuat dari database');
             } else {
                 console.warn('[Settings] Working days tidak valid atau kosong');
                 const container = document.querySelector('.working-days');
@@ -91,7 +92,6 @@ const settings = {
                     const chk = document.getElementById(`day-${day}`);
                     if (chk) chk.checked = false;
                 });
-                toast.warning('Data hari kerja belum ada, silakan simpan terlebih dahulu');
             }
 
             // ========== SETTING LAINNYA ==========
@@ -106,8 +106,6 @@ const settings = {
             const locationTracking = (allSettings.location_tracking === 'true' || allSettings.location_tracking === true || allSettings.location_tracking === 'TRUE');
             const locationCheckbox = document.getElementById('setting-location-tracking');
             if (locationCheckbox) locationCheckbox.checked = locationTracking;
-
-            toast.success('Pengaturan berhasil dimuat');
         } catch (error) {
             console.error('[Settings] Load error:', error);
             this.showError(error.message);
@@ -180,14 +178,17 @@ const settings = {
         const name = document.getElementById('company-name').value;
         const logo = document.getElementById('company-logo').value;
         try {
+            loadingIndicator.show('Menyimpan informasi perusahaan...');
             const results = await Promise.all([
                 api.saveSetting('company_name', name),
                 api.saveSetting('company_logo', logo)
             ]);
+            loadingIndicator.hide();
             if (results.some(r => !r || !r.success)) throw new Error('Gagal menyimpan');
             updateCompanyUI();
             toast.success('Informasi perusahaan disimpan ke database');
         } catch (error) {
+            loadingIndicator.hide();
             console.error(error);
             toast.error(error.message || 'Gagal menyimpan');
         }
@@ -204,7 +205,9 @@ const settings = {
         console.log('[Settings] Saving workdays:', workdays, jsonString);
 
         try {
+            loadingIndicator.show('Menyimpan hari kerja...');
             const result = await api.saveSetting('working_days', jsonString);
+            loadingIndicator.hide();
             if (!result || !result.success) throw new Error(result?.error || 'Gagal menyimpan');
 
             toast.success('Hari kerja disimpan ke database');
@@ -223,6 +226,7 @@ const settings = {
             const errDiv = document.querySelector('.workdays-error');
             if (errDiv) errDiv.remove();
         } catch (error) {
+            loadingIndicator.hide();
             console.error('[Settings] Save workdays error:', error);
             toast.error(error.message || 'Gagal menyimpan ke database');
         }
@@ -233,14 +237,17 @@ const settings = {
         const faceRecognition = document.getElementById('setting-face-recognition').checked;
         const locationTracking = document.getElementById('setting-location-tracking').checked;
         try {
+            loadingIndicator.show('Menyimpan pengaturan sistem...');
             const results = await Promise.all([
                 api.saveSetting('late_tolerance', lateTolerance),
                 api.saveSetting('face_recognition', String(faceRecognition)),
                 api.saveSetting('location_tracking', String(locationTracking))
             ]);
+            loadingIndicator.hide();
             if (results.some(r => !r || !r.success)) throw new Error('Gagal menyimpan');
             toast.success('Pengaturan sistem disimpan ke database');
         } catch (error) {
+            loadingIndicator.hide();
             console.error(error);
             toast.error(error.message || 'Gagal menyimpan');
         }
@@ -285,13 +292,16 @@ const settings = {
     async addShift() {
         const newShift = { name: 'Shift Baru', startTime: '09:00', endTime: '18:00', date: '' };
         try {
+            loadingIndicator.show('Menambahkan shift...');
             const result = await api.addShift(newShift);
+            loadingIndicator.hide();
             if (!result || !result.success) throw new Error(result?.error || 'Gagal menambah shift');
             this.shifts.push(result.data);
             this.renderShifts();
             storage.set('shifts', this.shifts);
             toast.success('Shift ditambahkan ke database');
         } catch (error) {
+            loadingIndicator.hide();
             console.error(error);
             toast.error(error.message);
         }
@@ -302,12 +312,15 @@ const settings = {
         const oldValue = this.shifts[index][field];
         this.shifts[index][field] = value;
         try {
+            loadingIndicator.show('Memperbarui shift...');
             const updateData = { [field]: value };
             const result = await api.updateShift(this.shifts[index].id, updateData);
+            loadingIndicator.hide();
             if (!result || !result.success) throw new Error(result?.error || 'Gagal update shift');
             storage.set('shifts', this.shifts);
             toast.success('Shift diperbarui di database');
         } catch (error) {
+            loadingIndicator.hide();
             this.shifts[index][field] = oldValue;
             this.renderShifts();
             toast.error(error.message);
@@ -317,13 +330,16 @@ const settings = {
     async deleteShift(index) {
         if (!confirm('Hapus shift ini? Tindakan ini tidak dapat dibatalkan.')) return;
         try {
+            loadingIndicator.show('Menghapus shift...');
             const result = await api.deleteShift(this.shifts[index].id);
+            loadingIndicator.hide();
             if (!result || !result.success) throw new Error(result?.error || 'Gagal hapus shift');
             this.shifts.splice(index, 1);
             this.renderShifts();
             storage.set('shifts', this.shifts);
             toast.info('Shift dihapus dari database');
         } catch (error) {
+            loadingIndicator.hide();
             console.error(error);
             toast.error(error.message);
         }

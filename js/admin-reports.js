@@ -24,7 +24,15 @@ const adminReports = {
             router.navigate('dashboard');
             return;
         }
+        loadingIndicator.show('Memuat rekap absensi...');
         await this.loadData();
+        
+        // Populate department filter AFTER data is loaded
+        const dept = document.getElementById('report-dept-filter');
+        if (dept) {
+            await departmentManager.populateSelects('report-dept-filter');
+        }
+        
         this.bindAttendanceEvents();
         // Default filter ke bulan terkini
         const today = new Date();
@@ -32,6 +40,7 @@ const adminReports = {
         const monthInput = document.getElementById('attendance-month');
         if (monthInput) monthInput.value = this.filters.attendance.month;
         this.renderAttendanceReports();
+        loadingIndicator.hide();
     },
     async initJurnalReports() {
         if (!auth.isAdmin()) {
@@ -39,6 +48,7 @@ const adminReports = {
             router.navigate('dashboard');
             return;
         }
+        loadingIndicator.show('Memuat rekap jurnal...');
         await this.loadData();
         this.bindJurnalEvents();
         if (!this.filters.jurnal.month) {
@@ -48,6 +58,7 @@ const adminReports = {
             if (monthInput) monthInput.value = this.filters.jurnal.month;
         }
         this.renderJurnalReports();
+        loadingIndicator.hide();
     },
     async initLeaveReports() {
         if (!auth.isAdmin()) {
@@ -55,6 +66,7 @@ const adminReports = {
             router.navigate('dashboard');
             return;
         }
+        loadingIndicator.show('Memuat rekap cuti & izin...');
         await this.loadData();
         this.bindLeaveEvents();
         // Default filter ke bulan terkini
@@ -69,10 +81,12 @@ const adminReports = {
         const statusInput = document.getElementById('leave-status-filter');
         if (statusInput) statusInput.value = '';
         this.renderLeaveReports();
+        loadingIndicator.hide();
     },
 
     async loadData() {
         try {
+            loadingIndicator.show('Mengambil data dari server...');
             console.log('🔄 Loading data from API...');
             const [empResult, jurnalResult, leaveResult, izinResult, attResult] = await Promise.all([
                 api.getEmployees(),
@@ -81,6 +95,7 @@ const adminReports = {
                 api.getAllIzin(),
                 api.getAllAttendance()
             ]);
+            loadingIndicator.hide();
             console.log('📡 API Results - Employees:', empResult);
             console.log('📡 API Results - Leaves:', leaveResult);
             console.log('📡 API Results - Izin:', izinResult);
@@ -245,8 +260,13 @@ const adminReports = {
         if (btnPrint) btnPrint.onclick = () => this.printReport('attendance');
         const month = document.getElementById('attendance-month');
         if (month) month.onchange = (e) => { this.filters.attendance.month = e.target.value; this.renderAttendanceReports(); };
+        
+        // Department filter event (already populated in initAttendanceReports)
         const dept = document.getElementById('report-dept-filter');
-        if (dept) dept.onchange = (e) => { this.filters.attendance.dept = e.target.value; this.renderAttendanceReports(); };
+        if (dept) {
+            dept.onchange = (e) => { this.filters.attendance.dept = e.target.value; this.renderAttendanceReports(); };
+        }
+        
         const status = document.getElementById('report-status-filter');
         if (status) status.onchange = (e) => { this.filters.attendance.status = e.target.value; this.renderAttendanceReports(); };
     },
