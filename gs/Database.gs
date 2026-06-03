@@ -452,15 +452,33 @@ function saveShiftScheduleBulk(yearMonth, scheduleData) {
  */
 function getUniqueDepartments() {
   try {
-    const sheet = getSheet('Employees');
+    // Pastikan database sudah diinisialisasi
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName('Employees');
+    
+    // Jika sheet belum ada, inisialisasi database dulu
+    if (!sheet || sheet.getLastRow() < 1) {
+      console.log('Sheet Employees kosong atau belum ada, menjalankan initDatabase...');
+      initDatabase();
+      sheet = ss.getSheetByName('Employees');
+    }
+    
     const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return [];
+    if (lastRow < 2) {
+      console.log('Tidak ada data karyawan, mengembalikan array kosong');
+      return [];
+    }
     
     const lastCol = sheet.getLastColumn();
-    if (lastCol < 1) return [];
+    if (lastCol < 1) {
+      console.log('Tidak ada kolom di sheet Employees');
+      return [];
+    }
     
     const allData = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
     const headers = allData[0];
+    
+    console.log('Headers di sheet Employees:', headers);
     
     // Cari index kolom 'department' (case-insensitive)
     let deptIndex = -1;
@@ -471,7 +489,12 @@ function getUniqueDepartments() {
       }
     }
     
-    if (deptIndex === -1) return [];
+    if (deptIndex === -1) {
+      console.error('Kolom department tidak ditemukan. Headers:', headers);
+      return [];
+    }
+    
+    console.log('Kolom department ditemukan di index:', deptIndex);
     
     const departments = [];
     const seen = {};
@@ -488,11 +511,14 @@ function getUniqueDepartments() {
       }
     }
     
+    console.log('Departemen unik ditemukan:', departments);
+    
     // Urutkan alfabetis
     departments.sort();
     return departments;
   } catch (e) {
     console.error('Error getUniqueDepartments:', e);
+    Logger.log('Stack trace: ' + e.stack);
     return [];
   }
 }
