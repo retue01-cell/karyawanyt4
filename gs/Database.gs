@@ -275,17 +275,19 @@ function getShiftScheduleForMonth(yearMonth) {
       return { success: true, data: {} };
     }
     
+    // Normalisasi yearMonth untuk pencocokan
+    const normalizedYearMonth = yearMonth.includes('-') ? yearMonth : yearMonth;
+    const expectedPrefix = normalizedYearMonth + '-';
+    
+    // Gunakan map untuk mencegah duplikasi (key: userId_day)
+    const uniqueMap = {};
+    
     all.forEach(item => {
       if (item && item.date && item.userId) {
         const dateStr = String(item.date);
-        // Format yearMonth bisa "2024-1" atau "2024-01", normalisasi dulu
-        const normalizedYearMonth = yearMonth.includes('-') ? yearMonth : yearMonth;
-        const itemYearMonth = dateStr.substring(0, 7); // ambil "YYYY-MM"
         
-        // Cek kecocokan tahun-bulan (handle format berbeda)
-        const isMatch = dateStr.startsWith(normalizedYearMonth + '-') || 
-                       itemYearMonth === normalizedYearMonth ||
-                       itemYearMonth === normalizedYearMonth.replace('-', '-');
+        // Cek apakah tanggal sesuai dengan bulan yang diminta
+        const isMatch = dateStr.startsWith(expectedPrefix);
         
         if (isMatch) {
           const userId = String(item.userId);
@@ -293,13 +295,25 @@ function getShiftScheduleForMonth(yearMonth) {
           if (dayParts.length >= 3) {
             const day = parseInt(dayParts[2], 10);
             if (!isNaN(day) && day >= 1 && day <= 31) {
-              if (!result[userId]) result[userId] = {};
-              result[userId][day] = item.shift || '';
+              const uniqueKey = userId + '_' + day;
+              // Simpan data terakhir jika ada duplikasi
+              uniqueMap[uniqueKey] = {
+                userId: userId,
+                day: day,
+                shift: item.shift || ''
+              };
             }
           }
         }
       }
     });
+    
+    // Convert map ke format result yang diharapkan
+    for (const key in uniqueMap) {
+      const item = uniqueMap[key];
+      if (!result[item.userId]) result[item.userId] = {};
+      result[item.userId][item.day] = item.shift;
+    }
     
     console.log('getShiftScheduleForMonth:', yearMonth, 'result:', result);
     return { success: true, data: result };
@@ -316,18 +330,39 @@ function saveShiftScheduleItemData(userId, date, shift) {
   }
   
   const all = getAllShiftSchedules();
-  const existingIndex = all.findIndex(item => String(item.userId) === String(userId) && item.date === date);
   
-  if (existingIndex >= 0) {
+  // Cari semua entri yang cocok untuk userId dan date ini
+  const existingIndices = [];
+  for (let i = 0; i < all.length; i++) {
+    const item = all[i];
+    if (item && String(item.userId) === String(userId) && String(item.date) === String(date)) {
+      existingIndices.push(i);
+    }
+  }
+  
+  if (existingIndices.length > 0) {
     // Data sudah ada, update atau hapus
-    const existing = all[existingIndex];
+    const firstExisting = all[existingIndices[0]];
+    
     if (shift === '' || shift === null || shift === undefined) {
-      // Hapus data jika shift kosong
-      deleteRow('ShiftSchedule', existing.id);
+      // Hapus semua data duplikat jika shift kosong
+      for (let i = existingIndices.length - 1; i >= 0; i--) {
+        const idx = existingIndices[i];
+        const itemToDelete = all[idx];
+        deleteRow('ShiftSchedule', itemToDelete.id);
+      }
       return { success: true, message: 'Shift deleted', data: { userId, date, shift: '' } };
     } else {
-      // Update data existing
-      updateRow('ShiftSchedule', existing.id, { shift: shift });
+      // Update data pertama, hapus duplikat lainnya
+      if (existingIndices.length > 1) {
+        for (let i = existingIndices.length - 1; i > 0; i--) {
+          const idx = existingIndices[i];
+          const itemToDelete = all[idx];
+          deleteRow('ShiftSchedule', itemToDelete.id);
+        }
+      }
+      // Update entri pertama
+      updateRow('ShiftSchedule', firstExisting.id, { shift: shift });
       return { success: true, message: 'Shift updated', data: { userId, date, shift } };
     }
   } else {

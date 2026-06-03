@@ -268,19 +268,31 @@ function getScheduleData(startDate, endDate) {
     const startStr = Utilities.formatDate(startDate, "Asia/Jakarta", "yyyy-MM-dd");
     const endStr = Utilities.formatDate(endDate, "Asia/Jakarta", "yyyy-MM-dd");
     
+    // Gunakan object untuk mencegah duplikasi (key: userId_date)
+    const uniqueMap = {};
+    
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       const dateStr = Utilities.formatDate(new Date(row[2]), "Asia/Jakarta", "yyyy-MM-dd");
       
       // Filter berdasarkan periode
       if (dateStr >= startStr && dateStr <= endStr) {
-        result.push({
+        const userId = String(row[1]);
+        const uniqueKey = userId + '_' + dateStr;
+        
+        // Hanya ambil data terakhir jika ada duplikasi
+        uniqueMap[uniqueKey] = {
           id: row[0],
-          userId: row[1],
+          userId: userId,
           date: dateStr,
           shift: row[3]
-        });
+        };
       }
+    }
+    
+    // Convert map ke array
+    for (const key in uniqueMap) {
+      result.push(uniqueMap[key]);
     }
     
     return { success: true, data: result };
