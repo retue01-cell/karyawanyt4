@@ -240,7 +240,13 @@ function rowToObject(headers, row) {
 
 // ========== SHIFT SCHEDULE (BARU) ==========
 
+function ensureShiftScheduleInitialized() {
+  const headers = ['id', 'userId', 'date', 'shift'];
+  ensureSheetHasHeaders('ShiftSchedule', headers);
+}
+
 function getAllShiftSchedules() {
+  ensureShiftScheduleInitialized();
   const sheet = getSheet('ShiftSchedule');
   const lastRow = sheet.getLastRow();
   if (lastRow < 1) return [];
@@ -274,6 +280,7 @@ function getShiftScheduleForMonth(yearMonth) {
 }
 
 function saveShiftScheduleItemData(userId, date, shift) {
+  ensureShiftScheduleInitialized();
   if (!userId || !date || shift === undefined) {
     return { success: false, error: 'userId, date, shift required' };
   }
@@ -291,6 +298,7 @@ function saveShiftScheduleItemData(userId, date, shift) {
 }
 
 function saveShiftScheduleBulk(yearMonth, scheduleData) {
+  ensureShiftScheduleInitialized();
   if (!yearMonth || !scheduleData) {
     return { success: false, error: 'yearMonth and scheduleData required' };
   }
