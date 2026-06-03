@@ -452,24 +452,33 @@ function saveShiftScheduleBulk(yearMonth, scheduleData) {
  */
 function getUniqueDepartments() {
   try {
+    console.log('=== START getUniqueDepartments ===');
+    
     // Pastikan database sudah diinisialisasi
     const ss = getSpreadsheet();
     let sheet = ss.getSheetByName('Employees');
+    
+    console.log('Sheet object:', sheet ? 'exists' : 'null');
     
     // Jika sheet belum ada, inisialisasi database dulu
     if (!sheet || sheet.getLastRow() < 1) {
       console.log('Sheet Employees kosong atau belum ada, menjalankan initDatabase...');
       initDatabase();
       sheet = ss.getSheetByName('Employees');
+      console.log('Sheet setelah init:', sheet ? 'exists' : 'null');
     }
     
     const lastRow = sheet.getLastRow();
+    console.log('Last row:', lastRow);
+    
     if (lastRow < 2) {
-      console.log('Tidak ada data karyawan, mengembalikan array kosong');
+      console.log('Tidak ada data karyawan (hanya header atau kosong), mengembalikan array kosong');
       return [];
     }
     
     const lastCol = sheet.getLastColumn();
+    console.log('Last column:', lastCol);
+    
     if (lastCol < 1) {
       console.log('Tidak ada kolom di sheet Employees');
       return [];
@@ -479,10 +488,12 @@ function getUniqueDepartments() {
     const headers = allData[0];
     
     console.log('Headers di sheet Employees:', headers);
+    console.log('Total baris data:', allData.length);
     
     // Cari index kolom 'department' (case-insensitive)
     let deptIndex = -1;
     for (let i = 0; i < headers.length; i++) {
+      console.log('Checking header[' + i + ']:', headers[i], 'lowercase:', headers[i].toLowerCase());
       if (headers[i].toLowerCase() === 'department') {
         deptIndex = i;
         break;
@@ -491,7 +502,7 @@ function getUniqueDepartments() {
     
     if (deptIndex === -1) {
       console.error('Kolom department tidak ditemukan. Headers:', headers);
-      throw new Error('Kolom "department" tidak ditemukan di sheet Employees. Pastikan header tertulis "department" (kolom D).');
+      throw new Error('Kolom "department" tidak ditemukan di sheet Employees. Header yang ditemukan: ' + headers.join(', '));
     }
     
     console.log('Kolom department ditemukan di index:', deptIndex);
@@ -502,11 +513,14 @@ function getUniqueDepartments() {
     // Mulai dari baris ke-2 (index 1) untuk skip header
     for (let i = 1; i < allData.length; i++) {
       const dept = allData[i][deptIndex];
+      console.log('Baris ' + i + ' department value:', dept, 'type:', typeof dept);
+      
       if (dept && typeof dept === 'string' && dept.trim() !== '') {
         const cleanDept = dept.trim();
         if (!seen[cleanDept]) {
           seen[cleanDept] = true;
           departments.push(cleanDept);
+          console.log('Added department:', cleanDept);
         }
       }
     }
@@ -515,9 +529,14 @@ function getUniqueDepartments() {
     
     // Urutkan alfabetis
     departments.sort();
+    console.log('Departemen setelah sort:', departments);
+    console.log('=== END getUniqueDepartments ===');
+    
     return departments;
   } catch (e) {
     console.error('Error getUniqueDepartments:', e);
+    console.error('Stack trace:', e.stack);
+    Logger.log('Error details: ' + e.toString());
     Logger.log('Stack trace: ' + e.stack);
     throw e; // Re-throw agar frontend bisa menangkap error dengan pesan yang jelas
   }
