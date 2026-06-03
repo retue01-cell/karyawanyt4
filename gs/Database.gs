@@ -275,9 +275,17 @@ function getShiftScheduleForMonth(yearMonth) {
       return { success: true, data: {} };
     }
     
-    // Normalisasi yearMonth untuk pencocokan
-    const normalizedYearMonth = yearMonth.includes('-') ? yearMonth : yearMonth;
+    // Normalisasi yearMonth untuk pencocokan (pastikan format YYYY-MM dengan leading zero)
+    let normalizedYearMonth = yearMonth;
+    if (yearMonth.includes('-')) {
+      const parts = yearMonth.split('-');
+      const year = parts[0];
+      const month = String(parseInt(parts[1], 10)).padStart(2, '0');
+      normalizedYearMonth = `${year}-${month}`;
+    }
     const expectedPrefix = normalizedYearMonth + '-';
+    
+    console.log('getShiftScheduleForMonth input:', yearMonth, 'normalized:', normalizedYearMonth, 'prefix:', expectedPrefix);
     
     // Gunakan map untuk mencegah duplikasi (key: userId_day)
     const uniqueMap = {};
@@ -329,13 +337,19 @@ function saveShiftScheduleItemData(userId, date, shift) {
     return { success: false, error: 'userId and date required' };
   }
   
+  // Normalisasi format tanggal (pastikan YYYY-MM-DD dengan leading zero)
+  const normalizedDate = normalizeDate(date);
+  
+  console.log('saveShiftScheduleItemData:', userId, date, normalizedDate, shift);
+  
   const all = getAllShiftSchedules();
   
   // Cari semua entri yang cocok untuk userId dan date ini
   const existingIndices = [];
   for (let i = 0; i < all.length; i++) {
     const item = all[i];
-    if (item && String(item.userId) === String(userId) && String(item.date) === String(date)) {
+    const itemDate = normalizeDate(String(item.date));
+    if (item && String(item.userId) === String(userId) && itemDate === normalizedDate) {
       existingIndices.push(i);
     }
   }
@@ -351,7 +365,7 @@ function saveShiftScheduleItemData(userId, date, shift) {
         const itemToDelete = all[idx];
         deleteRow('ShiftSchedule', itemToDelete.id);
       }
-      return { success: true, message: 'Shift deleted', data: { userId, date, shift: '' } };
+      return { success: true, message: 'Shift deleted', data: { userId, date: normalizedDate, shift: '' } };
     } else {
       // Update data pertama, hapus duplikat lainnya
       if (existingIndices.length > 1) {
@@ -363,21 +377,34 @@ function saveShiftScheduleItemData(userId, date, shift) {
       }
       // Update entri pertama
       updateRow('ShiftSchedule', firstExisting.id, { shift: shift });
-      return { success: true, message: 'Shift updated', data: { userId, date, shift } };
+      return { success: true, message: 'Shift updated', data: { userId, date: normalizedDate, shift } };
     }
   } else {
     // Data belum ada
     if (shift === '' || shift === null || shift === undefined) {
       // Tidak ada data untuk dihapus
-      return { success: true, message: 'Nothing to delete', data: { userId, date, shift: '' } };
+      return { success: true, message: 'Nothing to delete', data: { userId, date: normalizedDate, shift: '' } };
     } else {
       // Tambah data baru
       const newId = getNextId('ShiftSchedule');
-      const newRow = { id: newId, userId: String(userId), date: date, shift: shift };
+      const newRow = { id: newId, userId: String(userId), date: normalizedDate, shift: shift };
       addRow('ShiftSchedule', newRow);
       return { success: true, message: 'Shift created', data: newRow };
     }
   }
+}
+
+// Helper function untuk normalisasi tanggal ke format YYYY-MM-DD
+function normalizeDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length >= 3) {
+    const year = parts[0];
+    const month = String(parseInt(parts[1], 10)).padStart(2, '0');
+    const day = String(parseInt(parts[2], 10)).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return dateStr;
 }
 
 function saveShiftScheduleBulk(yearMonth, scheduleData) {
@@ -385,8 +412,23 @@ function saveShiftScheduleBulk(yearMonth, scheduleData) {
   if (!yearMonth || !scheduleData) {
     return { success: false, error: 'yearMonth and scheduleData required' };
   }
+  
+  // Normalisasi yearMonth ke format YYYY-MM dengan leading zero
+  let normalizedYearMonth = yearMonth;
+  if (yearMonth.includes('-')) {
+    const parts = yearMonth.split('-');
+    const year = parts[0];
+    const month = String(parseInt(parts[1], 10)).padStart(2, '0');
+    normalizedYearMonth = `${year}-${month}`;
+  }
+  
+  console.log('saveShiftScheduleBulk:', yearMonth, 'normalized:', normalizedYearMonth);
+  
   const all = getAllShiftSchedules();
-  const toDelete = all.filter(item => item.date && item.date.startsWith(yearMonth));
+  const toDelete = all.filter(item => {
+    const itemDate = normalizeDate(String(item.date));
+    return itemDate.startsWith(normalizedYearMonth + '-');
+  });
   toDelete.forEach(item => deleteRow('ShiftSchedule', item.id));
   
   for (const userId in scheduleData) {
@@ -394,7 +436,7 @@ function saveShiftScheduleBulk(yearMonth, scheduleData) {
     for (const day in days) {
       const shift = days[day];
       if (shift && shift !== '') {
-        const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
+        const date = `${normalizedYearMonth}-${String(day).padStart(2, '0')}`;
         saveShiftScheduleItemData(userId, date, shift);
       }
     }
