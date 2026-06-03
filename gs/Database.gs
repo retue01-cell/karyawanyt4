@@ -1,0 +1,312 @@
+/**
+ * Portal Karyawan - Database Helper
+ * Generic CRUD operations for Google Sheets
+ * 
+ * PENTING: Ganti SPREADSHEET_ID dengan ID spreadsheet kamu
+ */
+
+const SPREADSHEET_ID = '1K8ZogDZS96LlSPSqf7J0eH25uvSyq6oHxgzlWWkBJ_4';
+
+let _spreadsheet = null;
+
+function getSpreadsheet() {
+  if (!_spreadsheet) {
+    _spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  }
+  return _spreadsheet;
+}
+
+function getSheet(sheetName) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+  return sheet;
+}
+
+// ========== PASTIKAN SHEET MEMILIKI HEADER ==========
+function ensureSheetHasHeaders(sheetName, headers) {
+  const sheet = getSheet(sheetName);
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  
+  // Jika sheet benar-benar kosong (tidak ada baris atau kolom)
+  if (lastRow === 0 || lastCol === 0) {
+    // Buat header
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+  
+  // Jika sheet memiliki data, pastikan baris pertama adalah header
+  const firstRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  // Jika header tidak sesuai, timpa dengan header baru (hati-hati, ini akan menghapus data lama)
+  // Untuk keamanan, kita hanya tambah kolom jika kurang
+  if (firstRow.length < headers.length) {
+    // Tambah kolom baru
+    for (let i = firstRow.length; i < headers.length; i++) {
+      sheet.insertColumnAfter(i);
+      sheet.getRange(1, i + 1).setValue(headers[i]);
+    }
+  }
+  return sheet;
+}
+
+// ========== INIT DATABASE ==========
+function initDatabase() {
+  const sheetsConfig = {
+    'Users': ['id', 'name', 'email', 'password', 'role', 'avatar', 'createdAt'],
+    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password'],
+    'Attendance': ['id', 'userId', 'date', 'shift', 'clockIn', 'clockOut', 'breakStart', 'breakEnd', 'overtimeStart', 'status', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp'],
+    'Journals': ['id', 'userId', 'date', 'tasks', 'achievements', 'obstacles', 'plan', 'photo', 'updatedAt'],
+    'Leaves': ['id', 'userId', 'type', 'typeLabel', 'startDate', 'endDate', 'duration', 'reason', 'status', 'appliedAt'],
+    'Izin': ['id', 'userId', 'type', 'typeLabel', 'date', 'duration', 'reason', 'status', 'hasAttachment', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp', 'appliedAt'],
+    'Settings': ['key', 'value'],
+    'Shifts': ['id', 'name', 'startTime', 'endTime', 'date'],
+    'ShiftSchedule': ['id', 'userId', 'date', 'shift']
+  };
+
+  for (const [sheetName, headers] of Object.entries(sheetsConfig)) {
+    ensureSheetHasHeaders(sheetName, headers);
+  }
+
+  seedDefaultData();
+  
+  try {
+    setupDailyTrigger();
+  } catch (e) {
+    console.error("Gagal menginisialisasi trigger harian:", e);
+  }
+  
+  return { success: true, message: 'Database initialized successfully' };
+}
+
+function repairDatabase() {
+  return initDatabase();
+}
+
+function seedDefaultData() {
+  // Users
+  const usersSheet = getSheet('Users');
+  if (usersSheet.getLastRow() <= 1) {
+    usersSheet.appendRow([1, 'Admin User', 'admin@company.com', 'admin123', 'admin', 'https://ui-avatars.com/api/?name=Admin&background=F59E0B&color=fff', new Date().toISOString()]);
+    usersSheet.appendRow([2, 'Dewi Karyawan', 'karyawan@company.com', 'karyawan123', 'karyawan', 'https://ui-avatars.com/api/?name=Dewi&background=3B82F6&color=fff', new Date().toISOString()]);
+  }
+
+  // Shifts
+  const shiftsSheet = getSheet('Shifts');
+  if (shiftsSheet.getLastRow() <= 1) {
+    shiftsSheet.appendRow([1, 'Pagi', '08:30', '17:30', '']);
+    shiftsSheet.appendRow([2, 'Siang', '14:00', '23:00', '']);
+    shiftsSheet.appendRow([3, 'Malam', '23:00', '08:00', '']);
+  }
+
+  // Settings
+  const settingsSheet = getSheet('Settings');
+  if (settingsSheet.getLastRow() <= 1) {
+    settingsSheet.appendRow(['company_name', 'Portal Karyawan']);
+    settingsSheet.appendRow(['company_logo', '']);
+    settingsSheet.appendRow(['working_days', JSON.stringify({senin:true, selasa:true, rabu:true, kamis:true, jumat:true, sabtu:false, minggu:false})]);
+    settingsSheet.appendRow(['late_tolerance', '15']);
+    settingsSheet.appendRow(['face_recognition', 'true']);
+    settingsSheet.appendRow(['location_tracking', 'true']);
+  }
+
+  // Employees
+  const empSheet = getSheet('Employees');
+  if (empSheet.getLastRow() <= 1) {
+    const employees = [
+      [1, 'Ahmad Rizky', 'ahmad@company.com', 'IT', 'Developer', 'Pagi', 'active', '2024-01-15', 'https://ui-avatars.com/api/?name=Ahmad&background=3B82F6&color=fff', 'pass'],
+      [2, 'Budi Santoso', 'budi@company.com', 'HR', 'HR Manager', 'Pagi', 'active', '2023-06-01', 'https://ui-avatars.com/api/?name=Budi&background=10B981&color=fff', 'pass'],
+      [3, 'Citra Dewi', 'citra@company.com', 'Finance', 'Accountant', 'Pagi', 'on-leave', '2024-03-10', 'https://ui-avatars.com/api/?name=Citra&background=F59E0B&color=fff', ''],
+      [4, 'Dedi Pratama', 'dedi@company.com', 'Marketing', 'Marketing Staff', 'Siang', 'active', '2024-02-20', 'https://ui-avatars.com/api/?name=Dedi&background=EF4444&color=fff', ''],
+      [5, 'Eka Putri', 'eka@company.com', 'IT', 'UI/UX Designer', 'Pagi', 'active', '2024-01-05', 'https://ui-avatars.com/api/?name=Eka&background=8B5CF6&color=fff', 'pass'],
+      [6, 'Fajar Nugraha', 'fajar@company.com', 'Operations', 'Supervisor', 'Malam', 'inactive', '2023-09-12', 'https://ui-avatars.com/api/?name=Fajar&background=6B7280&color=fff', '']
+    ];
+    employees.forEach(emp => empSheet.appendRow(emp));
+  }
+}
+
+// ========== GENERIC CRUD (AMAN UNTUK SHEET KOSONG) ==========
+
+function getAllRows(sheetName) {
+  const sheet = getSheet(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) return [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  const headers = data[0];
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const obj = {};
+    for (let j = 0; j < headers.length; j++) {
+      obj[headers[j]] = data[i][j];
+    }
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function findRows(sheetName, column, value) {
+  const allRows = getAllRows(sheetName);
+  return allRows.filter(row => String(row[column]) === String(value));
+}
+
+function findRow(sheetName, column, value) {
+  const rows = findRows(sheetName, column, value);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+function addRow(sheetName, data) {
+  const sheet = getSheet(sheetName);
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) {
+    throw new Error('Sheet ' + sheetName + ' has no headers. Run initDatabase first.');
+  }
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const row = headers.map(header => data[header] !== undefined ? data[header] : '');
+  sheet.appendRow(row);
+  return data;
+}
+
+function updateRow(sheetName, id, data) {
+  const sheet = getSheet(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return null;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return null;
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  const headers = allData[0];
+  const idColIndex = headers.indexOf('id');
+  if (idColIndex === -1) return null;
+  for (let i = 1; i < allData.length; i++) {
+    if (String(allData[i][idColIndex]) === String(id)) {
+      headers.forEach((header, j) => {
+        if (data[header] !== undefined && header !== 'id') {
+          sheet.getRange(i + 1, j + 1).setValue(data[header]);
+        }
+      });
+      return { ...rowToObject(headers, allData[i]), ...data };
+    }
+  }
+  return null;
+}
+
+function deleteRow(sheetName, id) {
+  const sheet = getSheet(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return false;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return false;
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  const headers = allData[0];
+  const idColIndex = headers.indexOf('id');
+  if (idColIndex === -1) return false;
+  for (let i = 1; i < allData.length; i++) {
+    if (String(allData[i][idColIndex]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function getNextId(sheetName) {
+  const sheet = getSheet(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return 1;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return 1;
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const headers = allData[0];
+  const idColIndex = headers.indexOf('id');
+  if (idColIndex === -1) return Date.now();
+  let maxId = 0;
+  for (let i = 1; i < allData.length; i++) {
+    const id = Number(allData[i][idColIndex]);
+    if (id > maxId) maxId = id;
+  }
+  return maxId + 1;
+}
+
+function rowToObject(headers, row) {
+  const obj = {};
+  headers.forEach((header, i) => { obj[header] = row[i]; });
+  return obj;
+}
+
+// ========== SHIFT SCHEDULE (BARU) ==========
+
+function getAllShiftSchedules() {
+  const sheet = getSheet('ShiftSchedule');
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) return [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  const headers = data[0];
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const obj = {};
+    for (let j = 0; j < headers.length; j++) {
+      obj[headers[j]] = data[i][j];
+    }
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function getShiftScheduleForMonth(yearMonth) {
+  const all = getAllShiftSchedules();
+  const result = {};
+  all.forEach(item => {
+    if (item.date && item.date.startsWith(yearMonth)) {
+      const userId = String(item.userId);
+      const day = parseInt(item.date.split('-')[2], 10);
+      if (!result[userId]) result[userId] = {};
+      result[userId][day] = item.shift;
+    }
+  });
+  return { success: true, data: result };
+}
+
+function saveShiftScheduleItemData(userId, date, shift) {
+  if (!userId || !date || shift === undefined) {
+    return { success: false, error: 'userId, date, shift required' };
+  }
+  const all = getAllShiftSchedules();
+  const existing = all.find(item => String(item.userId) === String(userId) && item.date === date);
+  if (existing) {
+    updateRow('ShiftSchedule', existing.id, { shift: shift });
+    return { success: true, data: { userId, date, shift } };
+  } else {
+    const newId = getNextId('ShiftSchedule');
+    const newRow = { id: newId, userId: String(userId), date: date, shift: shift };
+    addRow('ShiftSchedule', newRow);
+    return { success: true, data: newRow };
+  }
+}
+
+function saveShiftScheduleBulk(yearMonth, scheduleData) {
+  if (!yearMonth || !scheduleData) {
+    return { success: false, error: 'yearMonth and scheduleData required' };
+  }
+  const all = getAllShiftSchedules();
+  const toDelete = all.filter(item => item.date && item.date.startsWith(yearMonth));
+  toDelete.forEach(item => deleteRow('ShiftSchedule', item.id));
+  
+  for (const userId in scheduleData) {
+    const days = scheduleData[userId];
+    for (const day in days) {
+      const shift = days[day];
+      if (shift && shift !== '') {
+        const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
+        saveShiftScheduleItemData(userId, date, shift);
+      }
+    }
+  }
+  return { success: true, message: 'Bulk schedule saved' };
+}
