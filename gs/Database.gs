@@ -266,17 +266,47 @@ function getAllShiftSchedules() {
 }
 
 function getShiftScheduleForMonth(yearMonth) {
-  const all = getAllShiftSchedules();
-  const result = {};
-  all.forEach(item => {
-    if (item.date && item.date.startsWith(yearMonth)) {
-      const userId = String(item.userId);
-      const day = parseInt(item.date.split('-')[2], 10);
-      if (!result[userId]) result[userId] = {};
-      result[userId][day] = item.shift;
+  try {
+    ensureShiftScheduleInitialized();
+    const all = getAllShiftSchedules();
+    const result = {};
+    
+    if (!all || all.length === 0) {
+      return { success: true, data: {} };
     }
-  });
-  return { success: true, data: result };
+    
+    all.forEach(item => {
+      if (item && item.date && item.userId) {
+        const dateStr = String(item.date);
+        // Format yearMonth bisa "2024-1" atau "2024-01", normalisasi dulu
+        const normalizedYearMonth = yearMonth.includes('-') ? yearMonth : yearMonth;
+        const itemYearMonth = dateStr.substring(0, 7); // ambil "YYYY-MM"
+        
+        // Cek kecocokan tahun-bulan (handle format berbeda)
+        const isMatch = dateStr.startsWith(normalizedYearMonth + '-') || 
+                       itemYearMonth === normalizedYearMonth ||
+                       itemYearMonth === normalizedYearMonth.replace('-', '-');
+        
+        if (isMatch) {
+          const userId = String(item.userId);
+          const dayParts = dateStr.split('-');
+          if (dayParts.length >= 3) {
+            const day = parseInt(dayParts[2], 10);
+            if (!isNaN(day) && day >= 1 && day <= 31) {
+              if (!result[userId]) result[userId] = {};
+              result[userId][day] = item.shift || '';
+            }
+          }
+        }
+      }
+    });
+    
+    console.log('getShiftScheduleForMonth:', yearMonth, 'result:', result);
+    return { success: true, data: result };
+  } catch (e) {
+    console.error('Error getShiftScheduleForMonth:', e);
+    return { success: false, error: e.message, data: {} };
+  }
 }
 
 function saveShiftScheduleItemData(userId, date, shift) {
