@@ -281,19 +281,37 @@ function getShiftScheduleForMonth(yearMonth) {
 
 function saveShiftScheduleItemData(userId, date, shift) {
   ensureShiftScheduleInitialized();
-  if (!userId || !date || shift === undefined) {
-    return { success: false, error: 'userId, date, shift required' };
+  if (!userId || !date) {
+    return { success: false, error: 'userId and date required' };
   }
+  
   const all = getAllShiftSchedules();
-  const existing = all.find(item => String(item.userId) === String(userId) && item.date === date);
-  if (existing) {
-    updateRow('ShiftSchedule', existing.id, { shift: shift });
-    return { success: true, data: { userId, date, shift } };
+  const existingIndex = all.findIndex(item => String(item.userId) === String(userId) && item.date === date);
+  
+  if (existingIndex >= 0) {
+    // Data sudah ada, update atau hapus
+    const existing = all[existingIndex];
+    if (shift === '' || shift === null || shift === undefined) {
+      // Hapus data jika shift kosong
+      deleteRow('ShiftSchedule', existing.id);
+      return { success: true, message: 'Shift deleted', data: { userId, date, shift: '' } };
+    } else {
+      // Update data existing
+      updateRow('ShiftSchedule', existing.id, { shift: shift });
+      return { success: true, message: 'Shift updated', data: { userId, date, shift } };
+    }
   } else {
-    const newId = getNextId('ShiftSchedule');
-    const newRow = { id: newId, userId: String(userId), date: date, shift: shift };
-    addRow('ShiftSchedule', newRow);
-    return { success: true, data: newRow };
+    // Data belum ada
+    if (shift === '' || shift === null || shift === undefined) {
+      // Tidak ada data untuk dihapus
+      return { success: true, message: 'Nothing to delete', data: { userId, date, shift: '' } };
+    } else {
+      // Tambah data baru
+      const newId = getNextId('ShiftSchedule');
+      const newRow = { id: newId, userId: String(userId), date: date, shift: shift };
+      addRow('ShiftSchedule', newRow);
+      return { success: true, message: 'Shift created', data: newRow };
+    }
   }
 }
 
