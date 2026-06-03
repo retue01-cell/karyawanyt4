@@ -162,7 +162,8 @@ function getShiftsData() {
       id: row.id,
       name: row.name,
       startTime: formatTimeToHHMM(row.startTime),
-      endTime: formatTimeToHHMM(row.endTime)
+      endTime: formatTimeToHHMM(row.endTime),
+      date: row.date || '' // Tambahkan field date untuk sinkronisasi dengan database
     };
   });
   return { success: true, data: fixed };
@@ -205,6 +206,7 @@ function addShiftData(data) {
   data.id = getNextId('Shifts');
   if (!data.startTime) data.startTime = '09:00';
   if (!data.endTime) data.endTime = '18:00';
+  if (!data.date) data.date = ''; // Tambahkan field date default kosong
   
   // Pastikan format waktu HH:MM
   data.startTime = formatTimeToHHMM(data.startTime);
@@ -221,6 +223,7 @@ function updateShiftData(id, data) {
   
   if (data.startTime) data.startTime = formatTimeToHHMM(data.startTime);
   if (data.endTime) data.endTime = formatTimeToHHMM(data.endTime);
+  // Field date bisa diupdate jika ada
   
   const updated = updateRow('Shifts', id, data);
   if (updated) {
