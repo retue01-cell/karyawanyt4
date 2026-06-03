@@ -491,7 +491,7 @@ function getUniqueDepartments() {
     
     if (deptIndex === -1) {
       console.error('Kolom department tidak ditemukan. Headers:', headers);
-      return [];
+      throw new Error('Kolom "department" tidak ditemukan di sheet Employees. Pastikan header tertulis "department" (kolom D).');
     }
     
     console.log('Kolom department ditemukan di index:', deptIndex);
@@ -519,6 +519,6 @@ function getUniqueDepartments() {
   } catch (e) {
     console.error('Error getUniqueDepartments:', e);
     Logger.log('Stack trace: ' + e.stack);
-    return [];
+    throw e; // Re-throw agar frontend bisa menangkap error dengan pesan yang jelas
   }
 }
