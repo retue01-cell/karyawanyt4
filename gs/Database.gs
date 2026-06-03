@@ -491,12 +491,17 @@ function getUniqueDepartments() {
     console.log('Total baris data:', allData.length);
     
     // Cari index kolom 'department' (case-insensitive, trim spaces)
+    // Cek berbagai kemungkinan nama kolom
     let deptIndex = -1;
+    const possibleNames = ['department', 'departemen', 'dept', 'divisi', 'bagian'];
+    
     for (let i = 0; i < headers.length; i++) {
       const headerName = String(headers[i]).trim().toLowerCase();
       console.log('Checking header[' + i + ']: "' + headers[i] + '" -> lowercase: "' + headerName + '"');
-      if (headerName === 'department' || headerName === 'departemen') {
+      
+      if (possibleNames.includes(headerName)) {
         deptIndex = i;
+        console.log('Match found with:', headerName);
         break;
       }
     }
