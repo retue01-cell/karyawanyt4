@@ -25,32 +25,17 @@ function getSheet(sheetName) {
   return sheet;
 }
 
-// ========== PASTIKAN SHEET MEMILIKI HEADER ==========
+// ========== PASTIKAN SHEET MEMILIKI HEADER (VERSI DIPERBAIKI) ==========
+// Memaksa (Force rewrite) Baris 1 setiap kali query untuk mencegah pergeseran nama / typo manual.
+// Ini kunci utama agar sync Frontend <-> Backend selalu sukses.
 function ensureSheetHasHeaders(sheetName, headers) {
   const sheet = getSheet(sheetName);
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
   
-  // Jika sheet benar-benar kosong (tidak ada baris atau kolom)
-  if (lastRow === 0 || lastCol === 0) {
-    // Buat header
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-    sheet.setFrozenRows(1);
-    return sheet;
-  }
+  // Force rewrite header row setiap kali untuk mencegah typo atau pergeseran kolom
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
   
-  // Jika sheet memiliki data, pastikan baris pertama adalah header
-  const firstRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  // Jika header tidak sesuai, timpa dengan header baru (hati-hati, ini akan menghapus data lama)
-  // Untuk keamanan, kita hanya tambah kolom jika kurang
-  if (firstRow.length < headers.length) {
-    // Tambah kolom baru
-    for (let i = firstRow.length; i < headers.length; i++) {
-      sheet.insertColumnAfter(i);
-      sheet.getRange(1, i + 1).setValue(headers[i]);
-    }
-  }
   return sheet;
 }
 
@@ -548,4 +533,54 @@ function getUniqueDepartments() {
     // Kembalikan array kosong jika ada error
     return [];
   }
+}
+
+// ========== SCRIPT KHUSUS UNTUK MERAPIKAN DESAIN DATABASE ==========
+// Lakukan RUN 1x saja dari Editor Google Apps Script
+function rapikanDatabase() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(); // Pastikan Anda menjalankannya di script yang terikat dengan Spreadsheet tsb
+  
+  const sheetsConfig = {
+    'Users': ['id', 'name', 'email', 'password', 'role', 'avatar', 'createdAt'],
+    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password'],
+    'Attendance': ['id', 'userId', 'date', 'shift', 'clockIn', 'clockOut', 'breakStart', 'breakEnd', 'overtimeStart', 'status', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp'],
+    'Journals': ['id', 'userId', 'date', 'tasks', 'achievements', 'obstacles', 'plan', 'photo', 'updatedAt'],
+    'Leaves': ['id', 'userId', 'type', 'typeLabel', 'startDate', 'endDate', 'duration', 'reason', 'status', 'appliedAt'],
+    'Izin': ['id', 'userId', 'type', 'typeLabel', 'date', 'duration', 'reason', 'status', 'hasAttachment', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp', 'appliedAt'],
+    'Settings': ['key', 'value'],
+    'Shifts': ['id', 'name', 'startTime', 'endTime', 'date'],
+    'ShiftSchedule': ['id', 'userId', 'date', 'shift']
+  };
+
+  for (const [sheetName, headers] of Object.entries(sheetsConfig)) {
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) sheet = ss.insertSheet(sheetName);
+    
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]); // Pastikan header benar
+    
+    // Rapikan Desain Visual (Tema Biru/Gelap)
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#1E293B'); // Warna gelap elegan
+    headerRange.setFontColor('#FFFFFF');
+    headerRange.setHorizontalAlignment('center');
+    
+    // Kunci Baris 1
+    sheet.setFrozenRows(1);
+    
+    // Hapus sisa kolom kosong bawaan (kolom Z, Y, dst) yang membuat berat 
+    const maxCols = sheet.getMaxColumns();
+    if (maxCols > headers.length) {
+      sheet.deleteColumns(headers.length + 1, maxCols - headers.length);
+    }
+    
+    // Auto Resize agar tulisan penuh dengan cell-nya
+    for (let i = 1; i <= headers.length; i++) {
+        sheet.autoResizeColumn(i);
+        // Batas minimal lebar agar tidak terlalu tergencet
+        if(sheet.getColumnWidth(i) < 100) sheet.setColumnWidth(i, 120);
+    }
+  }
+  
+  return { success: true, message: 'Database berhasil dirapikan!' };
 }
