@@ -32,6 +32,12 @@ const auth = {
             logoutBtn.addEventListener('click', () => this.handleLogout());
         }
 
+        // Tombol logout mobile (untuk tampilan mobile)
+        const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+        if (mobileLogoutBtn) {
+            mobileLogoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+
         // Profile click - open profile modal
         const userProfile = document.querySelector('.user-profile');
         if (userProfile) {
@@ -189,6 +195,11 @@ const auth = {
             // Reset form
             const loginForm = document.getElementById('login-form');
             if (loginForm) loginForm.reset();
+            
+            // Apply login display settings when showing login page
+            if (window.applyLoginDisplaySettings) {
+                window.applyLoginDisplaySettings();
+            }
         }
     },
 
@@ -313,6 +324,10 @@ const auth = {
 // Initialize auth on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     auth.init();
+    // Apply login display settings on initial page load
+    if (window.applyLoginDisplaySettings) {
+        window.applyLoginDisplaySettings();
+    }
 });
 
 // Expose to global

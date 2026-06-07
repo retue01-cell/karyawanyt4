@@ -116,6 +116,19 @@ const settings = {
             const locationTracking = (allSettings.location_tracking === 'true' || allSettings.location_tracking === true || allSettings.location_tracking === 'TRUE');
             const locationCheckbox = document.getElementById('setting-location-tracking');
             if (locationCheckbox) locationCheckbox.checked = locationTracking;
+
+            // Load pengaturan tampilan login
+            const logoShape = document.getElementById('logo-shape');
+            const logoShadow = document.getElementById('logo-shadow');
+            const loginAnimation = document.getElementById('login-animation');
+            const loginLogoSize = document.getElementById('login-logo-size');
+            const sidebarLogoSize = document.getElementById('sidebar-logo-size');
+
+            if (logoShape) logoShape.value = allSettings.login_logo_shape || 'rounded-full';
+            if (logoShadow) logoShadow.value = allSettings.login_logo_shadow || 'true';
+            if (loginAnimation) loginAnimation.value = allSettings.login_animation_effect || 'float';
+            if (loginLogoSize) loginLogoSize.value = allSettings.login_logo_size || '120';
+            if (sidebarLogoSize) sidebarLogoSize.value = allSettings.sidebar_logo_size || '32';
         } catch (error) {
             console.error('[Settings] Load error:', error);
             this.showError(error.message);
@@ -186,6 +199,12 @@ const settings = {
             const newBtn = saveSystemBtn.cloneNode(true);
             saveSystemBtn.parentNode.replaceChild(newBtn, saveSystemBtn);
             newBtn.addEventListener('click', () => this.saveSystemSettings());
+        }
+
+        // Login display form
+        const loginDisplayForm = document.getElementById('login-display-form');
+        if (loginDisplayForm) {
+            loginDisplayForm.addEventListener('submit', (e) => this.saveLoginDisplaySettings(e));
         }
     },
 
@@ -307,6 +326,34 @@ const settings = {
             loadingIndicator.hide();
             console.error(error);
             toast.error(error.message || 'Gagal menyimpan');
+        }
+    },
+
+    async saveLoginDisplaySettings(e) {
+        e.preventDefault();
+        const shape = document.getElementById('logo-shape').value;
+        const shadow = document.getElementById('logo-shadow').value;
+        const animation = document.getElementById('login-animation').value;
+        const loginLogoSize = document.getElementById('login-logo-size').value;
+        const sidebarLogoSize = document.getElementById('sidebar-logo-size').value;
+
+        try {
+            loadingIndicator.show('Menyimpan pengaturan tampilan...');
+            const results = await Promise.all([
+                api.saveSetting('login_logo_shape', shape),
+                api.saveSetting('login_logo_shadow', shadow),
+                api.saveSetting('login_animation_effect', animation),
+                api.saveSetting('login_logo_size', loginLogoSize),
+                api.saveSetting('sidebar_logo_size', sidebarLogoSize)
+            ]);
+            if (results.some(r => !r || !r.success)) throw new Error('Gagal menyimpan');
+
+            if (window.refreshCompanyData) await window.refreshCompanyData();
+            loadingIndicator.hide();
+            toast.success('Pengaturan tampilan berhasil disimpan!');
+        } catch (error) {
+            loadingIndicator.hide();
+            toast.error(error.message);
         }
     },
 

@@ -324,36 +324,9 @@
 }
 
 @media (max-width: 768px) {
-    /* Hide sidebar on mobile */
+    /* Hide sidebar completely on mobile - using bottom nav instead */
     .sidebar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        height: 100vh;
-        transform: translateX(-100%);
-        z-index: 1000;
-        width: 280px;
-        transition: transform 0.3s ease;
-    }
-    
-    .sidebar.open {
-        transform: translateX(0);
-    }
-    
-    /* Overlay when sidebar is open */
-    .sidebar-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 999;
-        display: none;
-    }
-    
-    .sidebar-overlay.show {
-        display: block;
+        display: none !important;
     }
     
     /* Main content full width */
@@ -372,18 +345,6 @@
     
     .page-title {
         font-size: var(--font-size-lg);
-    }
-    
-    /* Mobile menu toggle button */
-    .mobile-menu-toggle {
-        display: flex !important;
-        width: 40px;
-        height: 40px;
-        align-items: center;
-        justify-content: center;
-        background: var(--color-gray-100);
-        border-radius: var(--border-radius);
-        margin-right: var(--spacing);
     }
     
     /* Page content padding */
@@ -672,9 +633,53 @@
         font-size: var(--font-size-lg);
     }
     
-    /* Hide time on mobile top bar */
+    /* Tampilkan jam dan tanggal di mobile dengan ukuran lebih kecil */
+    .top-bar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .current-time {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        line-height: 1.2;
+        text-align: right;
+    }
+
+    .current-time .time {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--color-text);
+        display: block;
+    }
+
     .current-time .date {
-        display: none;
+        font-size: 0.65rem;
+        color: var(--color-text-muted);
+        display: block;
+        margin-top: 2px;
+    }
+
+    /* Pastikan tombol aksi tidak menumpuk */
+    .top-bar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    /* Tampilkan tombol logout mobile hanya di layar kecil */
+    .mobile-only {
+        display: flex !important;
+    }
+}
+
+/* Sembunyikan tombol mobile-only di desktop */
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none !important;
     }
 }
 

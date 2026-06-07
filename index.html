@@ -88,7 +88,6 @@
 
     <!-- Main App Container (Hidden by default) -->
     <div id="app-container" class="app-container hidden">
-        <div class="sidebar-overlay" id="sidebar-overlay"></div>
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo" id="sidebar-logo-container">
@@ -135,9 +134,22 @@
 
         <main class="main-content">
             <header class="top-bar">
-                <div class="top-bar-left"><button class="mobile-menu-toggle" id="mobile-menu-toggle" style="display: none;"><i class="fas fa-bars"></i></button><h1 class="page-title" id="page-title">Dashboard</h1></div>
+                <div class="top-bar-left">
+                    <!-- Tombol hamburger dihapus untuk mobile, navigasi menggunakan bottom bar -->
+                    <h1 class="page-title" id="page-title">Dashboard</h1>
+                </div>
                 <div class="top-bar-right">
-                    <div class="top-bar-actions"><button class="btn-icon" id="btn-notifications"><i class="fas fa-bell"></i><span class="badge">3</span></button><div class="current-time" id="current-time"><span class="time">12:00</span><span class="date">Senin, 7 Maret 2026</span></div></div>
+                    <div class="top-bar-actions">
+                        <button class="btn-icon" id="btn-notifications"><i class="fas fa-bell"></i><span class="badge">3</span></button>
+                        <!-- Tombol Logout Mobile (hanya tampil di mobile) -->
+                        <button class="btn-icon mobile-only" id="mobile-logout-btn" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                        <div class="current-time" id="current-time">
+                            <span class="time">12:00</span>
+                            <span class="date">Senin, 7 Maret 2026</span>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -329,6 +341,59 @@
                                     <div class="form-actions">
                                         <button type="submit" class="btn-primary" id="btn-save-contact">
                                             <i class="fas fa-save"></i> Simpan Pengaturan
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            <!-- Card Pengaturan Tampilan Login -->
+                            <div class="settings-card">
+                                <div class="card-header">
+                                    <h3>Tampilan Halaman Login</h3>
+                                </div>
+                                <form id="login-display-form" class="settings-form">
+                                    <div class="form-group">
+                                        <label for="logo-shape">Bentuk Logo</label>
+                                        <select id="logo-shape">
+                                            <option value="rounded-full">Bulat (Lingkaran)</option>
+                                            <option value="rounded-lg">Persegi Sudut Lengkung</option>
+                                            <option value="rounded-none">Persegi Tegas</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="logo-shadow">Efek Bayangan Logo</label>
+                                        <select id="logo-shadow">
+                                            <option value="true">Ya (Ada Bayangan)</option>
+                                            <option value="false">Tidak (Tanpa Bayangan)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="login-animation">Efek Animasi Halaman Login</label>
+                                        <select id="login-animation">
+                                            <option value="float">Animasi Mengambang (Float)</option>
+                                            <option value="pulse">Animasi Detak (Pulse)</option>
+                                            <option value="none">Tanpa Animasi</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="login-logo-size">Ukuran Logo di Halaman Login</label>
+                                        <select id="login-logo-size">
+                                            <option value="80">Kecil (80px)</option>
+                                            <option value="120" selected>Sedang (120px)</option>
+                                            <option value="160">Besar (160px)</option>
+                                            <option value="200">Ekstra Besar (200px)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sidebar-logo-size">Ukuran Logo di Sidebar Dashboard</label>
+                                        <select id="sidebar-logo-size">
+                                            <option value="24">Kecil (24px)</option>
+                                            <option value="32" selected>Sedang (32px)</option>
+                                            <option value="40">Besar (40px)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn-primary" id="btn-save-login-display">
+                                            <i class="fas fa-save"></i> Simpan Pengaturan Tampilan
                                         </button>
                                     </div>
                                 </form>
