@@ -112,11 +112,18 @@ const router = {
         }, 300);
     },
     
-    triggerPageInit(page) {
+    async triggerPageInit(page) {
         // Call init function for each page if exists
         switch(page) {
             case 'dashboard':
-                if (window.initDashboard) window.initDashboard();
+                if (window.initDashboard) {
+                    await window.initDashboard();
+                } else {
+                    // fallback
+                    if (window.dashboard && window.dashboard.refreshShiftInfo) {
+                        await window.dashboard.refreshShiftInfo();
+                    }
+                }
                 break;
             case 'absensi':
                 if (window.initAbsensi) window.initAbsensi();
