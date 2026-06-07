@@ -303,6 +303,52 @@ function saveAttendanceData(data) {
       }
   }
   
+  // Cek status lembur jika overtimeStart diisi dan clockOut melebihi endTime
+  if (data.overtimeStart && data.clockOut && data.status !== 'Outside') {
+      const dateStr = _parseDateToYMD(data.date);
+      const shiftDef = _getShiftForDate(data.shift, dateStr);
+      let shiftEndTimeStr = "17:00";
+      
+      if (shiftDef && shiftDef.endTime) {
+          if (shiftDef.endTime instanceof Date) {
+              const h = String(shiftDef.endTime.getHours()).padStart(2, '0');
+              const m = String(shiftDef.endTime.getMinutes()).padStart(2, '0');
+              shiftEndTimeStr = h + ':' + m;
+          } else {
+              shiftEndTimeStr = String(shiftDef.endTime).substring(0, 5);
+          }
+      } else {
+          const fallbackShift = getAllRows('Shifts').find(s => s.name === data.shift && (!s.date || s.date === ''));
+          if (fallbackShift && fallbackShift.endTime) {
+              shiftEndTimeStr = String(fallbackShift.endTime).substring(0,5);
+          }
+      }
+      
+      const safeClockOut = String(data.clockOut).replace('.', ':');
+      const safeShiftEnd = String(shiftEndTimeStr).replace('.', ':');
+      
+      const [outH, outM] = safeClockOut.split(':').map(Number);
+      const [endH, endM] = safeShiftEnd.split(':').map(Number);
+      
+      let outMinutes = (outH || 0) * 60 + (outM || 0);
+      let endMinutes = (endH || 0) * 60 + (endM || 0);
+      
+      // Penanganan shift malam
+      const safeShiftStart = shiftDef && shiftDef.startTime ? 
+          (shiftDef.startTime instanceof Date ? 
+              String(shiftDef.startTime.getHours()).padStart(2,'0') + ':' + String(shiftDef.startTime.getMinutes()).padStart(2,'0') : 
+              String(shiftDef.startTime).substring(0,5)) : "08:00";
+      const [startH, startM] = safeShiftStart.split(':').map(Number);
+      const shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
+      
+      if (endMinutes < shiftStartMinutes) {
+          endMinutes += 24 * 60;
+      }
+      if (outMinutes > endMinutes) {
+          data.status = 'Lembur';
+      }
+  }
+  
   // Check if record exists for this user+date
   const allRows = getAllRows('Attendance');
   const existing = allRows.find(row => 
