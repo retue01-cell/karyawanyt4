@@ -8,10 +8,45 @@ function _parseDateToYMD(val) {
   if (val instanceof Date) {
     return Utilities.formatDate(val, 'Asia/Jakarta', 'yyyy-MM-dd');
   }
-  if (typeof val === 'string' && val.length >= 10) {
-    return val.substring(0, 10);
+  
+  const valStr = String(val).trim();
+  
+  // 1. Deteksi Format ISO (yyyy-MM-dd atau yyyy/MM/dd)
+  const ymdRegex = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/;
+  let match = valStr.match(ymdRegex);
+  if (match) {
+    const y = match[1];
+    const m = match[2].padStart(2, '0');
+    const d = match[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
-  return String(val);
+  
+  // 2. Deteksi Format dd-MM-yyyy atau dd/MM/yyyy (misal: 07/06/2026 atau 7/6/2026)
+  // Format yang umum di regional Indonesia
+  const dmyRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/;
+  match = valStr.match(dmyRegex);
+  if (match) {
+    const d = match[1].padStart(2, '0');
+    const m = match[2].padStart(2, '0');
+    const y = match[3];
+    return `${y}-${m}-${d}`;
+  }
+  
+  // 3. Deteksi menggunakan parser Native JS Date sebagai pengaman terakhir
+  try {
+    const parsedDate = new Date(valStr);
+    if (!isNaN(parsedDate.getTime())) {
+      return Utilities.formatDate(parsedDate, 'Asia/Jakarta', 'yyyy-MM-dd');
+    }
+  } catch (e) {
+    // Abaikan jika gagal parse
+  }
+
+  // Fallback cadangan jika panjang karakter mencukupi
+  if (valStr.length >= 10) {
+    return valStr.substring(0, 10);
+  }
+  return valStr;
 }
 
 // Helper: ambil shift definition yang sesuai dengan tanggal tertentu

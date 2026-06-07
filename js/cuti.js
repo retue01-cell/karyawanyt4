@@ -8,17 +8,25 @@ const cuti = {
     filterStatus: '',
 
     async init() {
-        await this.loadLeaves();
-        this.initForm();
-        this.initFilters();
-        this.renderLeaveList();
-        this.updateStats();
+        loadingIndicator.show('Memuat data cuti...');
+        try {
+            await this.loadLeaves();
+            this.initForm();
+            this.initFilters();
+            this.renderLeaveList();
+            this.updateStats();
+        } catch (error) {
+            console.error('Error initializing cuti:', error);
+            toast.error('Gagal memuat data cuti');
+        } finally {
+            loadingIndicator.hide();
+        }
     },
 
     async loadLeaves() {
-        const currentUser = auth.getCurrentUser();
-        const userId = currentUser?.id || 'demo-user';
         try {
+            const currentUser = auth.getCurrentUser();
+            const userId = currentUser?.id || 'demo-user';
             const result = auth.isAdmin() ? await api.getAllLeaves() : await api.getLeaves(userId);
             this.leaves = result.data || [];
         } catch (error) {
@@ -96,6 +104,7 @@ const cuti = {
             reason: reason.value
         };
 
+        loadingIndicator.show('Mengirim pengajuan cuti...');
         try {
             const result = await api.submitLeave(leaveData);
             if (result.success) {
@@ -112,6 +121,8 @@ const cuti = {
         } catch (error) {
             console.error('Error submitting leave:', error);
             toast.error('Terjadi kesalahan');
+        } finally {
+            loadingIndicator.hide();
         }
 
         e.target.reset();
@@ -209,6 +220,7 @@ const cuti = {
     async deleteLeave(id) {
         if (!confirm('Batalkan pengajuan cuti ini? Setelah dibatalkan tidak dapat dikembalikan.')) return;
 
+        loadingIndicator.show('Membatalkan pengajuan cuti...');
         try {
             const result = await api.deleteLeave(id);
             if (result.success) {
@@ -228,6 +240,8 @@ const cuti = {
         } catch (error) {
             console.error('Error deleting leave:', error);
             toast.error('Terjadi kesalahan');
+        } finally {
+            loadingIndicator.hide();
         }
     },
 

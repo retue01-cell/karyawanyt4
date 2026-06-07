@@ -462,7 +462,11 @@ function applyLoginDisplaySettings() {
 // Refresh company data from server and update UI
 async function refreshCompanyData() {
     try {
-        const result = await api.getSettings();
+        const [result, shiftsResult] = await Promise.all([
+            api.getSettings(),
+            api.getShifts() // Tarik konfigurasi shift terbaru sekaligus
+        ]);
+        
         if (result && result.success && result.data) {
             const company = {
                 name: result.data.company_name || 'Portal Karyawan',
@@ -488,6 +492,12 @@ async function refreshCompanyData() {
             storage.set('login_animation_effect', company.loginAnimation);
             storage.set('login_logo_size', company.loginLogoSize);
             storage.set('sidebar_logo_size', company.sidebarLogoSize);
+            
+            // Simpan shift kerja yang diperbarui ke localStorage
+            if (shiftsResult && shiftsResult.success && shiftsResult.data) {
+                storage.set('shifts', shiftsResult.data);
+            }
+            
             updateCompanyUI();
             applyLoginDisplaySettings();
             console.log('Company data refreshed:', company.name, 'Logo:', company.logo);
@@ -516,6 +526,7 @@ function onDOMReady(callback) {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadingIndicator.init();
     initializeData();
     updateCompanyUI();
     applyLoginDisplaySettings();
@@ -546,6 +557,9 @@ window.onDOMReady = onDOMReady;
 // Loading Indicator Manager (Global)
 const loadingIndicator = {
     element: null,
+    counter: 0,
+    timer: null,
+    minDisplayTime: 600, // Minimal 600ms agar tidak flicker
     
     init() {
         this.element = document.getElementById('loading-indicator');
@@ -553,6 +567,14 @@ const loadingIndicator = {
     
     show(message = 'Memproses data...') {
         if (!this.element) this.init();
+        this.counter++;
+        
+        // Clear pending hide timer jika ada request baru
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
         if (this.element) {
             const span = this.element.querySelector('span');
             if (span) span.textContent = message;
@@ -562,9 +584,26 @@ const loadingIndicator = {
     
     hide() {
         if (!this.element) this.init();
-        if (this.element) {
-            this.element.classList.remove('active');
+        this.counter--;
+        
+        if (this.counter <= 0) {
+            this.counter = 0;
+            // Delay hiding untuk memastikan minimum display time
+            if (this.timer) clearTimeout(this.timer);
+            
+            this.timer = setTimeout(() => {
+                if (this.element && this.counter === 0) {
+                    this.element.classList.remove('active');
+                }
+                this.timer = null;
+            }, this.minDisplayTime);
         }
+    },
+
+    forceHide() {
+        this.counter = 0;
+        if (this.timer) clearTimeout(this.timer);
+        if (this.element) this.element.classList.remove('active');
     }
 };
 

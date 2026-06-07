@@ -12,19 +12,28 @@ const jurnal = {
     isSubmitting: false, // flag untuk mencegah double submit
 
     async init() {
-        await this.loadJurnals();
-        this.initDateSelector();
-        this.initForm();
-        this.initFilters();
-        this.initPhotoUpload();
-        this.renderJurnalList();
-        this.updateUI();
+        loadingIndicator.show('Memuat jurnal kerja...');
+        try {
+            await this.loadJurnals();
+            this.initDateSelector();
+            this.initForm();
+            this.initFilters();
+            this.initPhotoUpload();
+            this.renderJurnalList();
+            this.updateUI();
+            this.updateSummary();
+        } catch (error) {
+            console.error('Error initializing jurnal:', error);
+            toast.error('Gagal memuat jurnal');
+        } finally {
+            loadingIndicator.hide();
+        }
     },
 
     async loadJurnals() {
-        const currentUser = auth.getCurrentUser();
-        const userId = currentUser?.id || 'demo-user';
         try {
+            const currentUser = auth.getCurrentUser();
+            const userId = currentUser?.id || 'demo-user';
             const result = await api.getJournals(userId);
             this.jurnals = result.data || [];
         } catch (error) {
@@ -166,6 +175,7 @@ const jurnal = {
             updatedAt: new Date().toISOString()
         };
 
+        loadingIndicator.show('Menyimpan jurnal...');
         try {
             const result = await api.saveJournal(jurnalData);
             if (result && result.success) {
@@ -193,6 +203,7 @@ const jurnal = {
         } finally {
             this.isSubmitting = false;
             if (submitBtn) submitBtn.disabled = false;
+            loadingIndicator.hide();
         }
     },
 

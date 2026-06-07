@@ -10,29 +10,36 @@ const absensi = {
 
     async init() {
         console.log('Initializing absensi page...');
-        await this.loadTodayAttendance();
-        await this.loadAttendanceHistory();
-        console.log('Current state:', this.currentState);
-        console.log('Attendance data:', this.attendanceData);
-        this.initLiveClock();
-        this.initButtons();
-        this.renderTimeline();
-        this.updateUI();
+        loadingIndicator.show('Memuat data absensi...');
+        try {
+            await this.loadTodayAttendance();
+            await this.loadAttendanceHistory();
+            console.log('Current state:', this.currentState);
+            console.log('Attendance data:', this.attendanceData);
+            this.initLiveClock();
+            this.initButtons();
+            this.renderTimeline();
+            this.updateUI();
 
-        // Debug button state
-        setTimeout(() => {
-            const btnClockIn = document.getElementById('btn-clock-in');
-            if (btnClockIn) {
-                console.log('Clock In button - disabled:', btnClockIn.disabled);
-                console.log('Clock In button - visible:', btnClockIn.offsetParent !== null);
-            }
-        }, 100);
+            // Debug button state
+            setTimeout(() => {
+                const btnClockIn = document.getElementById('btn-clock-in');
+                if (btnClockIn) {
+                    console.log('Clock In button - disabled:', btnClockIn.disabled);
+                    console.log('Clock In button - visible:', btnClockIn.offsetParent !== null);
+                }
+            }, 100);
+        } catch (error) {
+            console.error('Error initializing absensi:', error);
+            toast.error('Gagal memuat absensi');
+        } finally {
+            loadingIndicator.hide();
+        }
     },
 
     async loadTodayAttendance() {
         const currentUser = auth.getCurrentUser();
         const userId = currentUser?.id || 'demo-user';
-
         try {
             const [result, settingsRes] = await Promise.all([
                 api.getTodayAttendance(userId),
@@ -410,6 +417,7 @@ const absensi = {
         const currentUser = auth.getCurrentUser();
         this.attendanceData.userId = currentUser?.id || 'demo-user';
 
+        loadingIndicator.show('Menyimpan data absensi...');
         try {
             const result = await api.saveAttendance(this.attendanceData);
             if (result && result.success && result.data) {
@@ -418,6 +426,8 @@ const absensi = {
             }
         } catch (error) {
             console.error('Error saving attendance:', error);
+        } finally {
+            loadingIndicator.hide();
         }
     },
 

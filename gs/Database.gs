@@ -382,14 +382,31 @@ function saveShiftScheduleItemData(userId, date, shift) {
 // Helper function untuk normalisasi tanggal ke format YYYY-MM-DD
 function normalizeDate(dateStr) {
   if (!dateStr) return '';
-  const parts = dateStr.split('-');
+  
+  // Bersihkan dari jam jika ada (misal: "2026-06-07 00:00:00")
+  const cleanStr = String(dateStr).split(' ')[0].trim();
+  
+  // Pecah menggunakan regex yang mendukung tanda hubung (-) maupun garis miring (/)
+  const parts = cleanStr.split(/[-/]/);
+  
   if (parts.length >= 3) {
-    const year = parts[0];
-    const month = String(parseInt(parts[1], 10)).padStart(2, '0');
-    const day = String(parseInt(parts[2], 10)).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // Jika bagian pertama adalah Tahun (4 digit) -> format yyyy-MM-dd
+    if (parts[0].length === 4) {
+      const year = parts[0];
+      const month = String(parseInt(parts[1], 10)).padStart(2, '0');
+      const day = String(parseInt(parts[2], 10)).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } 
+    // Jika bagian terakhir adalah Tahun (4 digit) -> format dd-MM-yyyy atau MM-dd-yyyy
+    else if (parts[2].length === 4) {
+      const year = parts[2];
+      // Secara default asumsikan format dd/MM/yyyy yang umum di regional Indonesia
+      const day = String(parseInt(parts[0], 10)).padStart(2, '0');
+      const month = String(parseInt(parts[1], 10)).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
   }
-  return dateStr;
+  return cleanStr;
 }
 
 function saveShiftScheduleBulk(yearMonth, scheduleData) {
