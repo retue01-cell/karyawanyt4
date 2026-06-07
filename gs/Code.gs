@@ -141,6 +141,9 @@ function handleRequest(e) {
       case 'deleteShift':
         result = deleteShiftData(data.id);
         break;
+      case 'getDepartments':
+        result = { success: true, data: getUniqueDepartments() };
+        break;
       case 'getSchedule':
         result = getScheduleData(data.month, data.year);
         break;

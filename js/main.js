@@ -341,21 +341,61 @@ function initializeData() {
 
 // Update company name in UI
 function updateCompanyUI() {
-    const company = storage.get('company', { name: 'Portal Karyawan' });
+    const company = storage.get('company', { name: 'Portal Karyawan', logo: '' });
+    const companyName = company.name || 'Portal Karyawan';
 
     const elements = {
-        'login-company-name': company.name,
-        'footer-company': company.name,
-        'sidebar-brand': company.name && typeof company.name === 'string' ? company.name.substring(0, 10) : 'Portal'
+        'login-company-name': companyName,
+        'footer-company': companyName,
+        'sidebar-brand': companyName
     };
 
     Object.entries(elements).forEach(([id, value]) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = value;
+        if (el) {
+            el.textContent = value;
+            // Tambahkan tooltip untuk nama lengkap saat hover
+            if (id === 'sidebar-brand' && value) {
+                el.title = value;
+            }
+        }
     });
 
-    document.title = company.name;
+    document.title = companyName;
+    
+    // Update logo jika ada
+    if (company.logo) {
+        const logoEls = document.querySelectorAll('.company-logo');
+        logoEls.forEach(el => {
+            if (el.tagName === 'IMG') {
+                el.src = company.logo;
+            } else {
+                el.style.backgroundImage = `url(${company.logo})`;
+            }
+        });
+    }
 }
+
+// Refresh company data from server and update UI
+async function refreshCompanyData() {
+    try {
+        const result = await api.getSettings();
+        if (result && result.success && result.data) {
+            const company = {
+                name: result.data.company_name || 'Portal Karyawan',
+                logo: result.data.company_logo || ''
+            };
+            storage.set('company', company);
+            updateCompanyUI();
+            console.log('Company data refreshed:', company.name);
+        }
+    } catch (error) {
+        console.error('Failed to refresh company data:', error);
+    }
+}
+
+// Export ke global
+window.refreshCompanyData = refreshCompanyData;
 
 // DOM Ready
 function onDOMReady(callback) {
@@ -427,6 +467,18 @@ const departmentManager = {
     async fetchDepartments() {
         console.log('[fetchDepartments] Memulai fetch departemen dari API');
         try {
+            // Coba gunakan endpoint baru getDepartments jika tersedia
+            if (api.getDepartments) {
+                const result = await api.getDepartments();
+                if (result.success && result.data) {
+                    const departments = Array.isArray(result.data) ? result.data.sort() : [];
+                    console.log('[fetchDepartments] Departemen unik dari API:', departments);
+                    this.cache = departments;
+                    return departments;
+                }
+            }
+            
+            // Fallback: ekstrak dari employees
             const result = await api.getEmployees();
             const employees = result.data || [];
             
@@ -439,7 +491,7 @@ const departmentManager = {
             });
             
             const departments = Array.from(deptSet).sort();
-            console.log('[fetchDepartments] Departemen unik:', departments);
+            console.log('[fetchDepartments] Departemen unik dari employees:', departments);
             this.cache = departments;
             return departments;
         } catch (error) {

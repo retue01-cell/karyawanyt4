@@ -88,15 +88,8 @@ const shiftSchedule = {
     },
 
     getShiftsForDate(dateStr) {
-        // Selalu tampilkan shift dasar: Libur, Pagi, Siang, Malam untuk setiap hari
-        const baseShifts = [
-            { name: 'Libur', startTime: '', endTime: '', date: '' },
-            { name: 'Pagi', startTime: '07:00', endTime: '15:00', date: '' },
-            { name: 'Siang', startTime: '15:00', endTime: '23:00', date: '' },
-            { name: 'Malam', startTime: '23:00', endTime: '07:00', date: '' }
-        ];
-        
-        return baseShifts;
+        // Kembalikan semua shift dari database (dinamis)
+        return this.shifts;
     },
 
     renderTable() {
@@ -148,8 +141,11 @@ const shiftSchedule = {
                 const dayOfWeek = date.getDay();
                 const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                 
-                // Get current shift from loaded data
-                const currentShift = (monthData[emp.id] && monthData[emp.id][day]) ? monthData[emp.id][day] : '';
+                // Tentukan shift hari ini: gunakan kustomisasi jadwal jika ada di database; 
+                // jika tidak ada, gunakan shift default dari profil karyawan (emp.shift)
+                const currentShift = (monthData[emp.id] && typeof monthData[emp.id][day] !== 'undefined' && monthData[emp.id][day] !== '') 
+                    ? monthData[emp.id][day] 
+                    : (emp.shift || 'Pagi');
                 
                 const td = document.createElement('td');
                 td.className = `shift-select-cell ${isWeekend ? 'weekend' : ''}`;
@@ -158,18 +154,16 @@ const shiftSchedule = {
                 select.setAttribute('data-employee-id', emp.id);
                 select.setAttribute('data-day', day);
                 
-                // Build options with base shifts only (no duplicates)
-                const baseShifts = [
-                    { name: 'Libur' },
-                    { name: 'Pagi' },
-                    { name: 'Siang' },
-                    { name: 'Malam' }
-                ];
-                
+                // Build options dengan shift dinamis dari database
                 let options = '<option value="">-</option>';
-                baseShifts.forEach(shift => {
-                    options += `<option value="${shift.name}" ${currentShift === shift.name ? 'selected' : ''}>${shift.name}</option>`;
+                this.shifts.forEach(shift => {
+                    const shiftName = shift.name;
+                    options += `<option value="${shiftName}" ${currentShift === shiftName ? 'selected' : ''}>${shiftName}</option>`;
                 });
+                // Tambahkan opsi "Libur" jika tidak ada di shifts
+                if (!this.shifts.some(s => s.name === 'Libur')) {
+                    options += `<option value="Libur" ${currentShift === 'Libur' ? 'selected' : ''}>Libur</option>`;
+                }
                 
                 select.innerHTML = options;
                 select.addEventListener('change', async (e) => { 
@@ -296,16 +290,24 @@ const shiftSchedule = {
         const key = `${this.currentYear}-${String(this.currentMonth+1).padStart(2,'0')}`;
         const monthData = this.scheduleData[key] || {};
         const filteredEmployees = this.getFilteredEmployees();
+        const daysInMonth = this.getDaysInMonth(this.currentMonth, this.currentYear);
         let pagi = 0, siang = 0, malam = 0, libur = 0;
+        
         filteredEmployees.forEach(emp => {
             const empData = monthData[emp.id] || {};
-            Object.values(empData).forEach(shift => {
+            for (let day = 1; day <= daysInMonth; day++) {
+                // Terapkan logika fallback yang sama pada perhitungan statistik ringkasan
+                const shift = (typeof empData[day] !== 'undefined' && empData[day] !== '') 
+                    ? empData[day] 
+                    : (emp.shift || 'Pagi');
+                    
                 if (shift === 'Pagi') pagi++;
                 else if (shift === 'Siang') siang++;
                 else if (shift === 'Malam') malam++;
                 else if (shift === 'Libur') libur++;
-            });
+            }
         });
+        
         document.getElementById('summary-total-employees').textContent = filteredEmployees.length;
         document.getElementById('summary-pagi').textContent = pagi;
         document.getElementById('summary-siang').textContent = siang;

@@ -71,14 +71,36 @@ function getTodayAttendance(userId) {
     return { success: true, data: todayRecord };
   }
   
-  // Return empty template
+  // LOGIKA SINKRONISASI UTAMA: Tentukan shift hari ini dengan prioritas
+  let todayShift = '';
+  const scheduleRows = getAllRows('ShiftSchedule');
+  
+  // 1. Cek apakah ada jadwal pengecualian khusus untuk hari ini di ShiftSchedule
+  const assigned = scheduleRows.find(row => 
+    String(row.userId) === String(userId) && _parseDateToYMD(row.date) === today
+  );
+  
+  if (assigned && assigned.shift) {
+    todayShift = assigned.shift;
+  } else {
+    // 2. Jika tidak ada pengecualian, ambil default shift dari profil karyawan di Employees
+    const emps = getAllRows('Employees');
+    const emp = emps.find(e => String(e.id) === String(userId));
+    if (emp && emp.shift) {
+      todayShift = emp.shift;
+    } else {
+      todayShift = 'Pagi'; // Fallback mutlak jika profil belum diset
+    }
+  }
+  
+  // Ambal template respons kosong dengan shift hari ini yang valid
   return { 
     success: true, 
     data: {
       id: null,
       userId: userId,
       date: today,
-      shift: 'Pagi',
+      shift: todayShift,
       clockIn: '',
       clockOut: '',
       breakStart: '',

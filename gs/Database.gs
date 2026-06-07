@@ -409,24 +409,50 @@ function saveShiftScheduleBulk(yearMonth, scheduleData) {
   
   console.log('saveShiftScheduleBulk:', yearMonth, 'normalized:', normalizedYearMonth);
   
+  const sheet = getSheet('ShiftSchedule');
   const all = getAllShiftSchedules();
+  
+  // Kumpulkan ID yang akan dihapus untuk batch delete
   const toDelete = all.filter(item => {
     const itemDate = normalizeDate(String(item.date));
     return itemDate.startsWith(normalizedYearMonth + '-');
   });
-  toDelete.forEach(item => deleteRow('ShiftSchedule', item.id));
   
+  // Hapus baris dari bawah ke atas untuk menghindari pergeseran index
+  const rowsToDelete = [];
+  const allRows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+  for (let i = 0; i < allRows.length; i++) {
+    const rowDate = normalizeDate(String(allRows[i][2]));
+    if (rowDate.startsWith(normalizedYearMonth + '-')) {
+      rowsToDelete.push(i + 2); // +2 karena baris 1 header
+    }
+  }
+  
+  // Hapus dari bawah ke atas
+  rowsToDelete.sort((a, b) => b - a);
+  rowsToDelete.forEach(row => sheet.deleteRow(row));
+  
+  // Siapkan data baru untuk batch insert
+  const newRows = [];
   for (const userId in scheduleData) {
     const days = scheduleData[userId];
     for (const day in days) {
       const shift = days[day];
       if (shift && shift !== '') {
         const date = `${normalizedYearMonth}-${String(day).padStart(2, '0')}`;
-        saveShiftScheduleItemData(userId, date, shift);
+        const newId = getNextId('ShiftSchedule');
+        const dateObj = new Date(date + 'T00:00:00');
+        newRows.push([newId, userId, dateObj, shift]);
       }
     }
   }
-  return { success: true, message: 'Bulk schedule saved' };
+  
+  // Batch insert semua data sekaligus
+  if (newRows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 4).setValues(newRows);
+  }
+  
+  return { success: true, message: `Saved ${newRows.length} schedules` };
 }
 
 // ========== DEPARTMENTS ==========

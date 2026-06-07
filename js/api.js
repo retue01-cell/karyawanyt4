@@ -55,10 +55,38 @@ const api = {
             const today = dateTime.getLocalDate();
             const all = storage.get('attendance', []);
             const todayRecord = all.find(a => a.date === today);
+            
+            // Fallback logic untuk mode offline: cek shift_schedule dulu, lalu profile user
+            let fallbackShift = 'Pagi';
+            try {
+                const schedules = storage.get('shift_schedule', {});
+                const todayObj = new Date();
+                const currentYear = todayObj.getFullYear();
+                const currentMonth = todayObj.getMonth();
+                const currentDay = todayObj.getDate();
+                const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+                
+                if (schedules[key] && schedules[key][String(userId)]) {
+                    const assignedShift = schedules[key][String(userId)][currentDay];
+                    if (assignedShift && assignedShift !== '') {
+                        fallbackShift = assignedShift;
+                    }
+                } else {
+                    // Cek dari profil karyawan di storage
+                    const employees = storage.get('admin_employees', []);
+                    const emp = employees.find(e => String(e.id) === String(userId));
+                    if (emp && emp.shift) {
+                        fallbackShift = emp.shift;
+                    }
+                }
+            } catch (e) {
+                console.error('Error determining fallback shift:', e);
+            }
+            
             return {
                 success: true,
                 data: todayRecord || {
-                    date: today, shift: 'Pagi', clockIn: null, clockOut: null,
+                    date: today, shift: fallbackShift, clockIn: null, clockOut: null,
                     breakStart: null, breakEnd: null, overtimeStart: null, status: 'waiting'
                 }
             };
@@ -266,16 +294,38 @@ const api = {
                 if (key === 'company_name') company.name = value;
                 if (key === 'company_logo') company.logo = value;
                 storage.set('company', company);
+                // Panggil update UI langsung untuk mode offline
+                if (window.updateCompanyUI) window.updateCompanyUI();
             }
             return { success: true, data: { key, value } };
         }
-        return this.request('saveSetting', { key, value });
+        const result = await this.request('saveSetting', { key, value });
+        if (result && result.success) {
+            // Jika sukses, update storage lokal juga agar UI langsung berubah
+            if (key === 'company_name' || key === 'company_logo') {
+                const company = storage.get('company', { name: '', logo: '' });
+                if (key === 'company_name') company.name = value;
+                if (key === 'company_logo') company.logo = value;
+                storage.set('company', company);
+                if (window.updateCompanyUI) window.updateCompanyUI();
+            }
+        }
+        return result;
     },
 
     // ========== SHIFTS ==========
     async getShifts() {
         if (!API_BASE_URL) return { success: true, data: storage.get('shifts', []) };
         return this.request('getShifts');
+    },
+    async getDepartments() {
+        if (!API_BASE_URL) {
+            // Fallback: ekstrak dari employees yang tersimpan
+            const employees = storage.get('admin_employees', []);
+            const depts = [...new Set(employees.map(e => e.department).filter(d => d))];
+            return { success: true, data: depts };
+        }
+        return this.request('getDepartments');
     },
     async addShift(data) {
         if (!API_BASE_URL) {
