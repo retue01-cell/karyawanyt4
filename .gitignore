@@ -4,6 +4,7 @@
 __pycache__/
 *.o
 *.obj
+*.class
 *.exe
 *.dll
 *.so
@@ -18,28 +19,29 @@ venv/
 .env.local
 .env.*
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Editors
-.vscode/
-.idea/
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Build systems
+# Build directories
 dist/
 build/
 target/
-.gradle/
+coverage/
+htmlcov/
+
+# Cache directories
 .mypy_cache/
 .pytest_cache/
+.gradle/
+.julia/
+zig*/
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
 
 # System files
 .DS_Store
