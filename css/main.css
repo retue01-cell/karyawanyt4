@@ -318,19 +318,21 @@ img {
     color: var(--color-primary);
     flex: 1;
     min-width: 0;
+    max-width: 100%;
 }
 
 .sidebar-logo i {
     font-size: var(--font-size-2xl);
+    flex-shrink: 0;
 }
 
 .sidebar-brand {
     transition: opacity var(--transition);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: none;
-    display: inline-block;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: 100%;
+    display: block;
     flex-shrink: 1;
     min-width: 0;
 }
