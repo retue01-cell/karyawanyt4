@@ -1,1 +1,1 @@
-Nothing should be ignored based on the provided file changes, as they only include JavaScript source files (.js) which are legitimate source code files that should be tracked in version control.
+Nothing should be ignored since the changes only include JavaScript source files (.js) which are not build artifacts, dependencies, or temporary files.
