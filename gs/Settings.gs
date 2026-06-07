@@ -76,51 +76,40 @@ function saveSettingData(key, value) {
 }
 
 /**
- * Automatisasi: Membaca jadwal Admin untuk hari ini dan memaksanya ke kolom 'shift' di tabel Employees.
+ * Automatisasi: Membaca jadwal dari sheet ShiftSchedule untuk hari ini 
+ * dan memperbarui kolom 'shift' di tabel Employees.
  * Fungsi ini bisa dipanggil manual, via trigger jam 00:00, atau otomatis sesaat setelah Simpan Jadwal.
  */
 function autoUpdateDailyShifts() {
   const jakartaDateStr = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd");
-  const dateParts = jakartaDateStr.split('-');
-  const currentYear = parseInt(dateParts[0], 10);
-  const currentMonth = parseInt(dateParts[1], 10) - 1; // JS month 0-index
-  const currentDay = parseInt(dateParts[2], 10);
+  console.log(`[ShiftSync] Mulai sinkronisasi untuk Hari ini: ${jakartaDateStr}`);
   
-  const key = `shift_schedule_${currentYear}-${currentMonth}`;
-  console.log(`[ShiftSync] Mulai sinkronisasi untuk Hari ini: ${currentDay}, Kunci Bulan: ${key}`);
+  // Ambil semua data dari sheet ShiftSchedule (bukan dari Settings)
+  const scheduleRows = getAllRows('ShiftSchedule');
   
-  const settingsRows = getAllRows('Settings');
-  let monthScheduleStr = null;
-  settingsRows.forEach(row => {
-    if (String(row.key) === key) {
-      monthScheduleStr = row.value;
-    }
+  // Filter jadwal yang tanggalnya sama dengan hari ini
+  const todaySchedules = scheduleRows.filter(row => {
+    const rowDate = _parseDateToYMD(row.date);
+    return rowDate === jakartaDateStr;
   });
   
-  if (!monthScheduleStr) {
-    console.log(`[ShiftSync] Gagal: Tidak ada string pengaturan untuk ${key}`);
-    return { success: false, error: 'Belum ada jadwal bulan ini' };
-  }
-  
-  let schedules;
-  try {
-    schedules = JSON.parse(monthScheduleStr);
-    console.log(`[ShiftSync] Berhasil parsing JSON jadwal. Mengandung ID karyawan:`, Object.keys(schedules));
-  } catch (e) {
-    console.log(`[ShiftSync] Gagal JSON parse:`, e);
-    return { success: false, error: 'Gagal membaca format jadwal' };
-  }
+  console.log(`[ShiftSync] Ditemukan ${todaySchedules.length} jadwal untuk hari ini`);
   
   const employeesRows = getAllRows('Employees');
   let updatedCount = 0;
   
-  employeesRows.forEach(emp => {
-    const stringId = String(emp.id);
-    if (schedules[stringId] && schedules[stringId][currentDay]) {
-      const assignedShift = schedules[stringId][currentDay];
-      if (assignedShift && String(emp.shift).trim() !== String(assignedShift).trim()) {
-        updateRow('Employees', emp.id, { shift: assignedShift });
+  todaySchedules.forEach(schedule => {
+    const userId = String(schedule.userId);
+    const newShift = schedule.shift;
+    
+    if (userId && newShift) {
+      // Cari karyawan berdasarkan ID
+      const emp = employeesRows.find(e => String(e.id) === userId);
+      
+      if (emp && String(emp.shift).trim() !== String(newShift).trim()) {
+        updateRow('Employees', userId, { shift: newShift });
         updatedCount++;
+        console.log(`[ShiftSync] Updated ${userId}: ${emp.shift} -> ${newShift}`);
       }
     }
   });
