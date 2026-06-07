@@ -157,12 +157,10 @@ function saveAttendanceData(data) {
   // If clocking in, determine if ontime or late menggunakan shift berdasarkan tanggal
   if (data.clockIn && !data.clockOut && !data.breakStart && !data.breakEnd && !data.overtimeStart) {
       // Get settings tolerance
-      let tolerance = 15; // default 15 mins
       const settingsRows = getAllRows('Settings');
-      const toleranceSetting = settingsRows.find(s => String(s.key) === 'late_tolerance');
-      if (toleranceSetting) {
-          tolerance = parseInt(toleranceSetting.value, 10) || 15;
-      }
+      const earlyThreshold = parseInt((settingsRows.find(s => String(s.key) === 'early_in_threshold') || {}).value || '60', 10);
+      const diligentThreshold = parseInt((settingsRows.find(s => String(s.key) === 'diligent_threshold') || {}).value || '30', 10);
+      const lateTolerance = parseInt((settingsRows.find(s => String(s.key) === 'late_tolerance') || {}).value || '15', 10);
       
       // Get shift start time berdasarkan tanggal
       const dateStr = _parseDateToYMD(data.date);
@@ -194,10 +192,16 @@ function saveAttendanceData(data) {
       const inMinutes = (inH || 0) * 60 + (inM || 0);
       const expectedMinutes = (startH || 0) * 60 + (startM || 0);
       
-      if (inMinutes > expectedMinutes + tolerance) {
-          data.status = 'Terlambat';
+      const diffMinutes = inMinutes - expectedMinutes; // positif = terlambat, negatif = lebih awal
+      
+      if (diffMinutes <= -earlyThreshold) {
+          data.status = 'Early In';
+      } else if (diffMinutes <= -diligentThreshold) {
+          data.status = 'Rajin';
+      } else if (diffMinutes <= lateTolerance) {
+          data.status = 'Tepat';
       } else {
-          data.status = 'ontime';
+          data.status = 'Terlambat';
       }
   }
   
