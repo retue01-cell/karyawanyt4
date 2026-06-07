@@ -329,7 +329,7 @@ img {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
+    max-width: none;
     display: inline-block;
     flex-shrink: 1;
     min-width: 0;
