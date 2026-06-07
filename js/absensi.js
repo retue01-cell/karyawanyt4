@@ -117,6 +117,9 @@ const absensi = {
 
             this.attendanceData = todayAttendance;
 
+            // Update tampilan shift
+            this.updateShiftDisplay();
+
             // Determine current state
             if (todayAttendance.shift === 'Libur' && !todayAttendance.clockIn) {
                 this.currentState = 'libur';
@@ -162,34 +165,28 @@ const absensi = {
         }
 
         tbody.innerHTML = historyData.slice(0, 10).map(record => {
-            // Calculate duration if clocked out
+            // Calculate duration using the shared utility function
             let duration = '--';
             if (record.clockIn && record.clockOut) {
-                const [inH, inM] = record.clockIn.split(':').map(Number);
-                const [outH, outM] = record.clockOut.split(':').map(Number);
-                let diffInMinutes = (outH * 60 + outM) - (inH * 60 + inM);
-
-                // Subtract break (assuming 1 hour if they took a break)
-                if (record.breakStart && record.breakEnd) {
-                    const [bInH, bInM] = record.breakStart.split(':').map(Number);
-                    const [bOutH, bOutM] = record.breakEnd.split(':').map(Number);
-                    const breakMinutes = (bOutH * 60 + bOutM) - (bInH * 60 + bInM);
-                    diffInMinutes -= breakMinutes;
-                }
-
-                if (diffInMinutes > 0) {
-                    const h = Math.floor(diffInMinutes / 60);
-                    const m = diffInMinutes % 60;
-                    duration = `${h}j ${m}m`;
-                }
+                duration = dateTime.calculateDuration(record.clockIn, record.clockOut);
             }
 
             // Status Badge
             let statusBadge = '<span class="badge-status">Waiting</span>';
             if (record.status && record.status.toLowerCase() === 'ontime') {
                 statusBadge = '<span class="badge-status success">Tepat Waktu</span>';
+            } else if (record.status && record.status.toLowerCase() === 'tepat') {
+                statusBadge = '<span class="badge-status success">Tepat Waktu</span>';
+            } else if (record.status && record.status.toLowerCase() === 'early in') {
+                statusBadge = '<span class="badge-status info">Early In</span>';
+            } else if (record.status && record.status.toLowerCase() === 'rajin') {
+                statusBadge = '<span class="badge-status success">Rajin</span>';
             } else if (record.status && (record.status.toLowerCase() === 'terlambat' || record.status.toLowerCase() === 'late')) {
                 statusBadge = '<span class="badge-status warning">Terlambat</span>';
+            } else if (record.status && record.status.toLowerCase() === 'outside') {
+                statusBadge = '<span class="badge-status danger">Outside</span>';
+            } else if (record.status && record.status.toLowerCase() === 'lembur') {
+                statusBadge = '<span class="badge-status warning">Lembur</span>';
             }
 
             // Format date to local standard UI string
@@ -421,8 +418,9 @@ const absensi = {
         try {
             const result = await api.saveAttendance(this.attendanceData);
             if (result && result.success && result.data) {
-                // Keep the frontend in sync with server-calculated data (especially 'status')
-                this.attendanceData = result.data;
+                // Gabungkan data server dengan data lokal, jangan timpa sepenuhnya
+                // Ini penting agar clockOut yang baru diset tidak hilang
+                this.attendanceData = { ...this.attendanceData, ...result.data };
             }
         } catch (error) {
             console.error('Error saving attendance:', error);
@@ -440,6 +438,12 @@ const absensi = {
         if (statusRing) {
             statusRing.className = 'status-ring';
 
+            // Cek apakah status dari backend adalah Outside atau Lembur
+            const isOutside = this.attendanceData && this.attendanceData.status && 
+                              this.attendanceData.status.toLowerCase() === 'outside';
+            const isLembur = this.attendanceData && this.attendanceData.status && 
+                             this.attendanceData.status.toLowerCase() === 'lembur';
+
             switch (this.currentState) {
                 case 'libur':
                     statusRing.classList.add('waiting'); // Reuse waiting style or custom if desired
@@ -447,14 +451,26 @@ const absensi = {
                     if (statusSubtext) statusSubtext.textContent = 'Anda tidak memiliki jadwal kerja hari ini.';
                     break;
                 case 'waiting':
-                    statusRing.classList.add('waiting');
-                    if (statusText) statusText.textContent = 'Siap Clock In';
-                    if (statusSubtext) statusSubtext.textContent = 'Tekan tombol di bawah untuk memulai';
+                    if (isOutside) {
+                        statusRing.classList.add('completed');
+                        if (statusText) statusText.textContent = 'Outside Shift';
+                        if (statusSubtext) statusSubtext.textContent = 'Anda melakukan absensi di luar jam kerja.';
+                    } else {
+                        statusRing.classList.add('waiting');
+                        if (statusText) statusText.textContent = 'Siap Clock In';
+                        if (statusSubtext) statusSubtext.textContent = 'Tekan tombol di bawah untuk memulai';
+                    }
                     break;
                 case 'clocked-in':
-                    statusRing.classList.add('active');
-                    if (statusText) statusText.textContent = 'Sedang Bekerja';
-                    if (statusSubtext) statusSubtext.textContent = 'Semangat bekerja!';
+                    if (isOutside) {
+                        statusRing.classList.add('completed');
+                        if (statusText) statusText.textContent = 'Outside Shift';
+                        if (statusSubtext) statusSubtext.textContent = 'Anda melakukan absensi di luar jam kerja.';
+                    } else {
+                        statusRing.classList.add('active');
+                        if (statusText) statusText.textContent = 'Sedang Bekerja';
+                        if (statusSubtext) statusSubtext.textContent = 'Semangat bekerja!';
+                    }
                     break;
                 case 'on-break':
                     statusRing.classList.add('on-break');
@@ -462,26 +478,40 @@ const absensi = {
                     if (statusSubtext) statusSubtext.textContent = 'Nikmati waktu istirahat Anda';
                     break;
                 case 'completed':
-                    statusRing.classList.add('completed');
-                    if (statusText) statusText.textContent = 'Selesai Bekerja';
-                    if (statusSubtext) statusSubtext.textContent = 'Terima kasih atas kerja kerasnya!';
+                    if (isOutside) {
+                        statusRing.classList.add('completed');
+                        if (statusText) statusText.textContent = 'Outside Shift';
+                        if (statusSubtext) statusSubtext.textContent = 'Anda melakukan absensi di luar jam kerja.';
+                    } else if (isLembur) {
+                        statusRing.classList.add('completed');
+                        if (statusText) statusText.textContent = 'Lembur';
+                        if (statusSubtext) statusSubtext.textContent = 'Anda melakukan lembur melebihi jam kerja.';
+                    } else {
+                        statusRing.classList.add('completed');
+                        if (statusText) statusText.textContent = 'Selesai Bekerja';
+                        if (statusSubtext) statusSubtext.textContent = 'Terima kasih atas kerja kerasnya!';
+                    }
                     break;
             }
         }
 
-        // Update buttons
+        // Update buttons - Logika disable tombol yang lebih detail
         const btnClockIn = document.getElementById('btn-clock-in');
         const btnBreak = document.getElementById('btn-break');
         const btnAfterBreak = document.getElementById('btn-after-break');
         const btnOvertime = document.getElementById('btn-overtime');
         const btnClockOut = document.getElementById('btn-clock-out');
 
-        // Clock In button
-        if (btnClockIn) {
-            const isClockedIn = this.attendanceData.clockIn !== null && this.attendanceData.clockIn !== undefined;
-            const isLibur = this.currentState === 'libur';
+        const isClockedIn = this.attendanceData.clockIn && this.attendanceData.clockIn !== '';
+        const isClockedOut = this.attendanceData.clockOut && this.attendanceData.clockOut !== '';
+        const isBreakStarted = this.attendanceData.breakStart && this.attendanceData.breakStart !== '';
+        const isBreakEnded = this.attendanceData.breakEnd && this.attendanceData.breakEnd !== '';
+        const isOvertimeStarted = this.attendanceData.overtimeStart && this.attendanceData.overtimeStart !== '';
 
-            btnClockIn.disabled = isClockedIn || isLibur;
+        // Clock In button: disabled jika sudah clock in atau sudah clock out
+        if (btnClockIn) {
+            const isLibur = this.currentState === 'libur';
+            btnClockIn.disabled = isClockedIn || isLibur || isClockedOut;
 
             if (isClockedIn) {
                 btnClockIn.classList.add('completed');
@@ -494,40 +524,59 @@ const absensi = {
             }
         }
 
-        // Break button
+        // Break button: disabled jika belum clock in, sudah break, atau sudah clock out
         if (btnBreak) {
-            btnBreak.disabled = !this.attendanceData.clockIn || this.attendanceData.breakStart !== null || this.attendanceData.clockOut !== null;
-            if (this.attendanceData.breakStart) {
+            btnBreak.disabled = !isClockedIn || isBreakStarted || isClockedOut;
+            if (isBreakStarted) {
                 btnBreak.classList.add('completed');
                 document.getElementById('break-time').textContent = this.attendanceData.breakStart;
             }
         }
 
-        // After Break button
+        // After Break button: PRIORITAS - disabled jika sudah clock out, belum break start, sudah break end, atau sudah overtime
         if (btnAfterBreak) {
-            btnAfterBreak.disabled = !this.attendanceData.breakStart || this.attendanceData.breakEnd !== null || this.attendanceData.clockOut !== null;
-            if (this.attendanceData.breakEnd) {
+            btnAfterBreak.disabled = isClockedOut || !isBreakStarted || isBreakEnded || isOvertimeStarted;
+            if (isBreakEnded) {
                 btnAfterBreak.classList.add('completed');
                 document.getElementById('after-break-time').textContent = this.attendanceData.breakEnd;
             }
         }
 
-        // Overtime button
+        // Overtime button: PRIORITAS - disabled jika sudah clock out, belum clock in, atau sudah mulai overtime
         if (btnOvertime) {
-            btnOvertime.disabled = !this.attendanceData.clockIn || this.attendanceData.clockOut !== null;
-            if (this.attendanceData.overtimeStart) {
+            btnOvertime.disabled = isClockedOut || !isClockedIn || isOvertimeStarted;
+            if (isOvertimeStarted) {
                 btnOvertime.classList.add('completed');
                 document.getElementById('overtime-time').textContent = this.attendanceData.overtimeStart;
             }
         }
 
-        // Clock Out button
+        // Clock Out button: disabled jika belum clock in atau sudah clock out
         if (btnClockOut) {
-            btnClockOut.disabled = !this.attendanceData.clockIn || this.attendanceData.clockOut !== null;
-            if (this.attendanceData.clockOut) {
+            btnClockOut.disabled = !isClockedIn || isClockedOut;
+            if (isClockedOut) {
                 btnClockOut.classList.add('completed');
                 document.getElementById('clock-out-time').textContent = this.attendanceData.clockOut;
             }
+        }
+    },
+
+    updateShiftDisplay() {
+        const shiftNameEl = document.getElementById('current-shift-name');
+        const shiftTimeEl = document.getElementById('current-shift-time');
+        if (!shiftNameEl || !shiftTimeEl) return;
+
+        const shiftName = this.attendanceData.shift || 'Pagi';
+        shiftNameEl.textContent = shiftName;
+
+        // Cari jam kerja shift dari storage (shifts)
+        const shifts = storage.get('shifts', []);
+        const shiftDetail = shifts.find(s => s.name === shiftName);
+        if (shiftDetail) {
+            shiftTimeEl.textContent = `${shiftDetail.startTime} - ${shiftDetail.endTime}`;
+        } else {
+            // Fallback default
+            shiftTimeEl.textContent = '08:00 - 17:00';
         }
     },
 

@@ -95,6 +95,8 @@ function seedDefaultData() {
     settingsSheet.appendRow(['company_logo', '']);
     settingsSheet.appendRow(['working_days', JSON.stringify({senin:true, selasa:true, rabu:true, kamis:true, jumat:true, sabtu:false, minggu:false})]);
     settingsSheet.appendRow(['late_tolerance', '15']);
+    settingsSheet.appendRow(['early_in_threshold', '60']);
+    settingsSheet.appendRow(['diligent_threshold', '30']);
     settingsSheet.appendRow(['face_recognition', 'true']);
     settingsSheet.appendRow(['location_tracking', 'true']);
   }

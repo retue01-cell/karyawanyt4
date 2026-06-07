@@ -171,11 +171,20 @@ const dashboard = {
             if (clockOutEl) clockOutEl.textContent = todayAttendance.clockOut || '--:--';
 
             if (todayAttendance.clockIn && todayAttendance.clockOut && durationEl) {
-                durationEl.textContent = dateTime.calculateDuration(
+                const duration = dateTime.calculateDuration(
                     todayAttendance.clockIn,
                     todayAttendance.clockOut
                 );
+                durationEl.textContent = duration;
+            } else if (durationEl) {
+                // Jika belum clock out, tampilkan 0j 0m
+                durationEl.textContent = '0j 0m';
             }
+        } else {
+            // Jika tidak ada data hari ini, reset semua
+            if (clockInEl) clockInEl.textContent = '--:--';
+            if (clockOutEl) clockOutEl.textContent = '--:--';
+            if (durationEl) durationEl.textContent = '0j 0m';
         }
     },
 

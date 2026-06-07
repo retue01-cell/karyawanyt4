@@ -1,1 +1,1 @@
-(js/absensi.js, js/admin-dashboard.js, js/cuti.js, js/izin.js, js/jurnal.js, js/main.js, js/shift-schedule.js)
+Nothing should be ignored in this case, as the changes only include JavaScript source files (.js) which are core project files and not build artifacts, dependencies, or temporary files.

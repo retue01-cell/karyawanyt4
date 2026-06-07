@@ -157,47 +157,195 @@ function saveAttendanceData(data) {
   // If clocking in, determine if ontime or late menggunakan shift berdasarkan tanggal
   if (data.clockIn && !data.clockOut && !data.breakStart && !data.breakEnd && !data.overtimeStart) {
       // Get settings tolerance
-      let tolerance = 15; // default 15 mins
       const settingsRows = getAllRows('Settings');
-      const toleranceSetting = settingsRows.find(s => String(s.key) === 'late_tolerance');
-      if (toleranceSetting) {
-          tolerance = parseInt(toleranceSetting.value, 10) || 15;
-      }
+      const earlyThreshold = parseInt((settingsRows.find(s => String(s.key) === 'early_in_threshold') || {}).value || '60', 10);
+      const diligentThreshold = parseInt((settingsRows.find(s => String(s.key) === 'diligent_threshold') || {}).value || '30', 10);
+      const lateTolerance = parseInt((settingsRows.find(s => String(s.key) === 'late_tolerance') || {}).value || '15', 10);
       
-      // Get shift start time berdasarkan tanggal
+      // Get shift start and end time berdasarkan tanggal
       const dateStr = _parseDateToYMD(data.date);
       const shiftDef = _getShiftForDate(data.shift, dateStr);
       let shiftStartTimeStr = "08:00"; // fallback
-      if (shiftDef && shiftDef.startTime) {
-          if (shiftDef.startTime instanceof Date) {
-              const h = String(shiftDef.startTime.getHours()).padStart(2, '0');
-              const m = String(shiftDef.startTime.getMinutes()).padStart(2, '0');
-              shiftStartTimeStr = h + ':' + m;
-          } else {
-              shiftStartTimeStr = String(shiftDef.startTime).substring(0, 5);
+      let shiftEndTimeStr = "17:00"; // fallback
+      
+      if (shiftDef) {
+          if (shiftDef.startTime) {
+              if (shiftDef.startTime instanceof Date) {
+                  const h = String(shiftDef.startTime.getHours()).padStart(2, '0');
+                  const m = String(shiftDef.startTime.getMinutes()).padStart(2, '0');
+                  shiftStartTimeStr = h + ':' + m;
+              } else {
+                  shiftStartTimeStr = String(shiftDef.startTime).substring(0, 5);
+              }
+          }
+          if (shiftDef.endTime) {
+              if (shiftDef.endTime instanceof Date) {
+                  const h = String(shiftDef.endTime.getHours()).padStart(2, '0');
+                  const m = String(shiftDef.endTime.getMinutes()).padStart(2, '0');
+                  shiftEndTimeStr = h + ':' + m;
+              } else {
+                  shiftEndTimeStr = String(shiftDef.endTime).substring(0, 5);
+              }
           }
       } else {
           // fallback: cari shift tanpa date
           const fallbackShift = getAllRows('Shifts').find(s => s.name === data.shift && (!s.date || s.date === ''));
-          if (fallbackShift && fallbackShift.startTime) {
-              shiftStartTimeStr = String(fallbackShift.startTime).substring(0,5);
+          if (fallbackShift) {
+              if (fallbackShift.startTime) {
+                  shiftStartTimeStr = String(fallbackShift.startTime).substring(0,5);
+              }
+              if (fallbackShift.endTime) {
+                  shiftEndTimeStr = String(fallbackShift.endTime).substring(0,5);
+              }
           }
       }
       
       // Compare times
       const safeClockIn = String(data.clockIn).replace('.', ':');
       const safeShiftStart = String(shiftStartTimeStr).replace('.', ':');
+      const safeShiftEnd = String(shiftEndTimeStr).replace('.', ':');
       
       const [inH, inM] = safeClockIn.split(':').map(Number);
       const [startH, startM] = safeShiftStart.split(':').map(Number);
+      const [endH, endM] = safeShiftEnd.split(':').map(Number);
       
       const inMinutes = (inH || 0) * 60 + (inM || 0);
       const expectedMinutes = (startH || 0) * 60 + (startM || 0);
+      const shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
       
-      if (inMinutes > expectedMinutes + tolerance) {
-          data.status = 'Terlambat';
+      const diffMinutes = inMinutes - expectedMinutes; // positif = terlambat, negatif = lebih awal
+      
+      // Cek outside untuk clock in: jika clock in setelah endTime shift
+      if (inMinutes > shiftEndMinutes) {
+          data.status = 'Outside';
+      } else if (diffMinutes <= -earlyThreshold) {
+          data.status = 'Early In';
+      } else if (diffMinutes <= -diligentThreshold) {
+          data.status = 'Rajin';
+      } else if (diffMinutes <= lateTolerance) {
+          data.status = 'Tepat';
       } else {
-          data.status = 'ontime';
+          data.status = 'Terlambat';
+      }
+  }
+  
+  // Cek outside untuk clock out
+  if (data.clockOut) {
+      const settingsRows = getAllRows('Settings');
+      const dateStr = _parseDateToYMD(data.date);
+      const shiftDef = _getShiftForDate(data.shift, dateStr);
+      let shiftStartTimeStr = "08:00";
+      let shiftEndTimeStr = "17:00";
+      
+      if (shiftDef) {
+          if (shiftDef.startTime) {
+              if (shiftDef.startTime instanceof Date) {
+                  const h = String(shiftDef.startTime.getHours()).padStart(2, '0');
+                  const m = String(shiftDef.startTime.getMinutes()).padStart(2, '0');
+                  shiftStartTimeStr = h + ':' + m;
+              } else {
+                  shiftStartTimeStr = String(shiftDef.startTime).substring(0, 5);
+              }
+          }
+          if (shiftDef.endTime) {
+              if (shiftDef.endTime instanceof Date) {
+                  const h = String(shiftDef.endTime.getHours()).padStart(2, '0');
+                  const m = String(shiftDef.endTime.getMinutes()).padStart(2, '0');
+                  shiftEndTimeStr = h + ':' + m;
+              } else {
+                  shiftEndTimeStr = String(shiftDef.endTime).substring(0, 5);
+              }
+          }
+      } else {
+          const fallbackShift = getAllRows('Shifts').find(s => s.name === data.shift && (!s.date || s.date === ''));
+          if (fallbackShift) {
+              if (fallbackShift.startTime) {
+                  shiftStartTimeStr = String(fallbackShift.startTime).substring(0,5);
+              }
+              if (fallbackShift.endTime) {
+                  shiftEndTimeStr = String(fallbackShift.endTime).substring(0,5);
+              }
+          }
+      }
+      
+      const safeClockOut = String(data.clockOut).replace('.', ':');
+      const safeShiftStart = String(shiftStartTimeStr).replace('.', ':');
+      const safeShiftEnd = String(shiftEndTimeStr).replace('.', ':');
+      
+      const [outH, outM] = safeClockOut.split(':').map(Number);
+      const [startH, startM] = safeShiftStart.split(':').map(Number);
+      const [endH, endM] = safeShiftEnd.split(':').map(Number);
+      
+      const outMinutes = (outH || 0) * 60 + (outM || 0);
+      const shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
+      const shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
+      
+      // Handle shift malam yang melewati tengah malam (startTime > endTime)
+      let isOutside = false;
+      if (shiftStartMinutes > shiftEndMinutes) {
+          // Shift malam: valid antara startTime s/d midnight DAN midnight s/d endTime
+          if (outMinutes < shiftEndMinutes && outMinutes >= startH * 60) {
+              // Ini tidak mungkin terjadi karena startH > endH, jadi kita cek sebaliknya
+              isOutside = false;
+          } else if (outMinutes < shiftEndMinutes || outMinutes > shiftStartMinutes) {
+              // Di luar rentang shift malam
+              isOutside = true;
+          }
+      } else {
+          // Shift normal: valid antara startTime s/d endTime
+          if (outMinutes < shiftStartMinutes || outMinutes > shiftEndMinutes) {
+              isOutside = true;
+          }
+      }
+      
+      if (isOutside) {
+          data.status = 'Outside';
+      }
+  }
+  
+  // Cek status lembur jika overtimeStart diisi dan clockOut melebihi endTime
+  if (data.overtimeStart && data.clockOut && data.status !== 'Outside') {
+      const dateStr = _parseDateToYMD(data.date);
+      const shiftDef = _getShiftForDate(data.shift, dateStr);
+      let shiftEndTimeStr = "17:00";
+      
+      if (shiftDef && shiftDef.endTime) {
+          if (shiftDef.endTime instanceof Date) {
+              const h = String(shiftDef.endTime.getHours()).padStart(2, '0');
+              const m = String(shiftDef.endTime.getMinutes()).padStart(2, '0');
+              shiftEndTimeStr = h + ':' + m;
+          } else {
+              shiftEndTimeStr = String(shiftDef.endTime).substring(0, 5);
+          }
+      } else {
+          const fallbackShift = getAllRows('Shifts').find(s => s.name === data.shift && (!s.date || s.date === ''));
+          if (fallbackShift && fallbackShift.endTime) {
+              shiftEndTimeStr = String(fallbackShift.endTime).substring(0,5);
+          }
+      }
+      
+      const safeClockOut = String(data.clockOut).replace('.', ':');
+      const safeShiftEnd = String(shiftEndTimeStr).replace('.', ':');
+      
+      const [outH, outM] = safeClockOut.split(':').map(Number);
+      const [endH, endM] = safeShiftEnd.split(':').map(Number);
+      
+      let outMinutes = (outH || 0) * 60 + (outM || 0);
+      let endMinutes = (endH || 0) * 60 + (endM || 0);
+      
+      // Penanganan shift malam
+      const safeShiftStart = shiftDef && shiftDef.startTime ? 
+          (shiftDef.startTime instanceof Date ? 
+              String(shiftDef.startTime.getHours()).padStart(2,'0') + ':' + String(shiftDef.startTime.getMinutes()).padStart(2,'0') : 
+              String(shiftDef.startTime).substring(0,5)) : "08:00";
+      const [startH, startM] = safeShiftStart.split(':').map(Number);
+      const shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
+      
+      if (endMinutes < shiftStartMinutes) {
+          endMinutes += 24 * 60;
+      }
+      if (outMinutes > endMinutes) {
+          data.status = 'Lembur';
       }
   }
   
