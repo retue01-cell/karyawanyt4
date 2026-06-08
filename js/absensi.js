@@ -380,6 +380,11 @@ const absensi = {
             toast.warning('Anda sudah clock out hari ini. Tidak dapat memulai lembur.');
             return;
         }
+        // CEK TAMBAHAN: Jika sudah lembur, tolak aksi
+        if (this.attendanceData.overtimeStart && this.attendanceData.overtimeStart !== '') {
+            toast.warning('Anda sudah memulai lembur hari ini.');
+            return;
+        }
         if (!this.attendanceData.clockIn) return;
 
         this.processing = true;
