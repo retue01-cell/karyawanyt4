@@ -4,6 +4,27 @@
  * Perbaikan: membaca working_days dengan benar, format waktu HH:MM
  */
 
+// ========== LOCATION SETTINGS ==========
+
+function saveLocationSettings(lat, lng, radius) {
+  if (!lat || !lng || !radius) {
+    return { success: false, error: 'Latitude, longitude, dan radius wajib diisi' };
+  }
+  saveSettingData('company_lat', lat.toString());
+  saveSettingData('company_lng', lng.toString());
+  saveSettingData('company_radius', radius.toString());
+  return { success: true, message: 'Pengaturan lokasi berhasil disimpan' };
+}
+
+function getLocationSettings() {
+  const settings = getSettingsData().data;
+  return {
+    lat: parseFloat(settings.company_lat) || 0,
+    lng: parseFloat(settings.company_lng) || 0,
+    radius: parseInt(settings.company_radius) || 100 // default 100 meter
+  };
+}
+
 // ========== SETTINGS ==========
 
 function getSettingsData() {
