@@ -7,8 +7,14 @@ const absensi = {
     currentState: 'waiting', // waiting, clocked-in, on-break, completed
     attendanceData: {},
     liveClockInterval: null,
+    isInitialized: false,
+    processing: false,
 
     async init() {
+        if (this.isInitialized) {
+            console.log('Absensi sudah diinisialisasi, skip duplicate init');
+            return;
+        }
         console.log('Initializing absensi page...');
         loadingIndicator.show('Memuat data absensi...');
         try {
@@ -20,6 +26,7 @@ const absensi = {
             this.initButtons();
             this.renderTimeline();
             this.updateUI();
+            this.isInitialized = true;
 
             // Debug button state
             setTimeout(() => {
@@ -230,30 +237,33 @@ const absensi = {
     },
 
     initButtons() {
-        // Clock In - Add both click and touch events for mobile
+        // Hapus listener lama pada setiap tombol dengan cloning + replace
         const btnClockIn = document.getElementById('btn-clock-in');
         if (btnClockIn) {
-            btnClockIn.addEventListener('click', (e) => {
+            const newBtn = btnClockIn.cloneNode(true);
+            btnClockIn.parentNode.replaceChild(newBtn, btnClockIn);
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.handleClockIn();
             });
-            btnClockIn.addEventListener('touchend', (e) => {
+            newBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 this.handleClockIn();
             });
-            console.log('Clock In button initialized, disabled:', btnClockIn.disabled);
         }
 
         // Break
         const btnBreak = document.getElementById('btn-break');
         if (btnBreak) {
-            btnBreak.addEventListener('click', (e) => {
+            const newBtn = btnBreak.cloneNode(true);
+            btnBreak.parentNode.replaceChild(newBtn, btnBreak);
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.handleBreak();
             });
-            btnBreak.addEventListener('touchend', (e) => {
+            newBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 this.handleBreak();
             });
@@ -262,12 +272,14 @@ const absensi = {
         // After Break
         const btnAfterBreak = document.getElementById('btn-after-break');
         if (btnAfterBreak) {
-            btnAfterBreak.addEventListener('click', (e) => {
+            const newBtn = btnAfterBreak.cloneNode(true);
+            btnAfterBreak.parentNode.replaceChild(newBtn, btnAfterBreak);
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.handleAfterBreak();
             });
-            btnAfterBreak.addEventListener('touchend', (e) => {
+            newBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 this.handleAfterBreak();
             });
@@ -276,12 +288,14 @@ const absensi = {
         // Overtime
         const btnOvertime = document.getElementById('btn-overtime');
         if (btnOvertime) {
-            btnOvertime.addEventListener('click', (e) => {
+            const newBtn = btnOvertime.cloneNode(true);
+            btnOvertime.parentNode.replaceChild(newBtn, btnOvertime);
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.handleOvertime();
             });
-            btnOvertime.addEventListener('touchend', (e) => {
+            newBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 this.handleOvertime();
             });
@@ -290,12 +304,14 @@ const absensi = {
         // Clock Out
         const btnClockOut = document.getElementById('btn-clock-out');
         if (btnClockOut) {
-            btnClockOut.addEventListener('click', (e) => {
+            const newBtn = btnClockOut.cloneNode(true);
+            btnClockOut.parentNode.replaceChild(newBtn, btnClockOut);
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.handleClockOut();
             });
-            btnClockOut.addEventListener('touchend', (e) => {
+            newBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 this.handleClockOut();
             });
@@ -303,18 +319,22 @@ const absensi = {
     },
 
     handleClockIn() {
+        if (this.processing) return;
         if (this.attendanceData.clockIn) return;
 
+        this.processing = true;
         // Navigate to face recognition first
         router.navigate('face-recognition');
         setTimeout(() => {
             if (window.faceRecognition) {
                 window.faceRecognition.init('clock-in');
             }
+            this.processing = false;
         }, 100);
     },
 
     handleBreak() {
+        if (this.processing) return;
         // CEK TAMBAHAN: Jika sudah clock out, tolak aksi
         if (this.attendanceData.clockOut && this.attendanceData.clockOut !== '') {
             toast.warning('Anda sudah clock out hari ini. Tidak dapat memulai istirahat.');
@@ -322,16 +342,19 @@ const absensi = {
         }
         if (!this.attendanceData.clockIn || this.attendanceData.breakStart) return;
 
+        this.processing = true;
         // Navigate to face recognition
         router.navigate('face-recognition');
         setTimeout(() => {
             if (window.faceRecognition) {
                 window.faceRecognition.init('break');
             }
+            this.processing = false;
         }, 100);
     },
 
     handleAfterBreak() {
+        if (this.processing) return;
         // CEK TAMBAHAN: Jika sudah clock out, tolak aksi
         if (this.attendanceData.clockOut && this.attendanceData.clockOut !== '') {
             toast.warning('Anda sudah clock out hari ini. Tidak dapat menyelesaikan istirahat.');
@@ -339,33 +362,56 @@ const absensi = {
         }
         if (!this.attendanceData.breakStart || this.attendanceData.breakEnd) return;
 
+        this.processing = true;
         // Navigate to face recognition
         router.navigate('face-recognition');
         setTimeout(() => {
             if (window.faceRecognition) {
                 window.faceRecognition.init('after-break');
             }
+            this.processing = false;
         }, 100);
     },
 
     handleOvertime() {
+        // Cek flag storage terlebih dahulu untuk mencegah double klik meski processing belum set
+        if (storage.get('temp_overtime_started')) {
+            toast.warning('Anda sudah memulai lembur hari ini.');
+            return;
+        }
+        if (this.processing) return;
         // CEK TAMBAHAN: Jika sudah clock out, tolak aksi
         if (this.attendanceData.clockOut && this.attendanceData.clockOut !== '') {
             toast.warning('Anda sudah clock out hari ini. Tidak dapat memulai lembur.');
             return;
         }
+        // CEK TAMBAHAN: Jika sudah lembur, tolak aksi
+        if (this.attendanceData.overtimeStart && this.attendanceData.overtimeStart !== '') {
+            toast.warning('Anda sudah memulai lembur hari ini.');
+            return;
+        }
         if (!this.attendanceData.clockIn) return;
 
+        this.processing = true;
+        
+        // Disable tombol overtime secara manual segera untuk mencegah klik kedua
+        const btnOvertime = document.getElementById('btn-overtime');
+        if (btnOvertime) {
+            btnOvertime.disabled = true;
+        }
+        
         // Navigate to face recognition
         router.navigate('face-recognition');
         setTimeout(() => {
             if (window.faceRecognition) {
                 window.faceRecognition.init('overtime');
             }
+            this.processing = false;
         }, 100);
     },
 
     handleClockOut() {
+        if (this.processing) return;
         // CEK TAMBAHAN: Jika sudah clock out, tolak aksi
         if (this.attendanceData.clockOut && this.attendanceData.clockOut !== '') {
             toast.warning('Anda sudah clock out hari ini.');
@@ -373,12 +419,14 @@ const absensi = {
         }
         if (!this.attendanceData.clockIn) return;
 
+        this.processing = true;
         // Navigate to face recognition
         router.navigate('face-recognition');
         setTimeout(() => {
             if (window.faceRecognition) {
                 window.faceRecognition.init('clock-out');
             }
+            this.processing = false;
         }, 100);
     },
 
@@ -412,6 +460,8 @@ const absensi = {
                 break;
             case 'overtime':
                 this.attendanceData.overtimeStart = timeStr;
+                // Simpan flag ke storage untuk mencegah double klik bahkan jika data belum tersimpan ke server
+                storage.set('temp_overtime_started', true);
                 toast.info(`Mulai lembur: ${timeStr}`);
                 break;
             case 'clock-out':
@@ -421,12 +471,10 @@ const absensi = {
                 break;
         }
 
-        // Save verification data
-        this.attendanceData.verification = {
-            timestamp: verificationData.timestamp,
-            location: verificationData.location,
-            photo: verificationData.photo
-        };
+        // Save verification data - gunakan field name yang dikenali backend
+        this.attendanceData.verificationPhoto = verificationData.photo || null;
+        this.attendanceData.verificationLocation = verificationData.location ? JSON.stringify(verificationData.location) : '';
+        this.attendanceData.verificationTimestamp = verificationData.timestamp || new Date().toISOString();
 
         await this.saveAttendance();
         this.updateUI();
@@ -668,6 +716,20 @@ const absensi = {
                 breakItem.classList.add('active');
             }
         }
+    },
+
+    // Reset method untuk membersihkan state saat logout atau navigasi keluar
+    reset() {
+        this.isInitialized = false;
+        this.processing = false;
+        if (this.liveClockInterval) {
+            clearInterval(this.liveClockInterval);
+            this.liveClockInterval = null;
+        }
+        this.currentState = 'waiting';
+        this.attendanceData = {};
+        // Hapus flag overtime saat reset
+        storage.remove('temp_overtime_started');
     }
 };
 

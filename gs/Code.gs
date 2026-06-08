@@ -159,6 +159,12 @@ function handleRequest(e) {
       case 'saveShiftScheduleItem':
         result = saveShiftScheduleItemData(data.userId, data.date, data.shift);
         break;
+      case 'getLocationSettings':
+        result = { success: true, data: getLocationSettings() };
+        break;
+      case 'saveLocationSettings':
+        result = saveLocationSettings(data.lat, data.lng, data.radius);
+        break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
