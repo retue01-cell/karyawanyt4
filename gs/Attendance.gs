@@ -209,14 +209,42 @@ function saveAttendanceData(data) {
       const [startH, startM] = safeShiftStart.split(':').map(Number);
       const [endH, endM] = safeShiftEnd.split(':').map(Number);
       
-      const inMinutes = (inH || 0) * 60 + (inM || 0);
+      let inMinutes = (inH || 0) * 60 + (inM || 0);
       const expectedMinutes = (startH || 0) * 60 + (startM || 0);
-      const shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
+      let shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
+      const shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
+      
+      // Handle shift malam yang melewati tengah malam (startTime > endTime)
+      let isOvernight = shiftStartMinutes > shiftEndMinutes;
+      if (isOvernight) {
+          shiftEndMinutes += 24 * 60; // Tambah 24 jam untuk perbandingan
+          // Jika clock in terjadi sebelum tengah malam (misal 22:00), biarkan seperti apa adanya
+          // Jika clock in terjadi setelah tengah malam (misal 02:00), tambah 24 jam
+          if (inMinutes < shiftStartMinutes && inMinutes <= (shiftEndMinutes - 24 * 60)) {
+              inMinutes += 24 * 60;
+          }
+      }
       
       const diffMinutes = inMinutes - expectedMinutes; // positif = terlambat, negatif = lebih awal
       
-      // Cek outside untuk clock in: jika clock in setelah endTime shift
-      if (inMinutes > shiftEndMinutes) {
+      // Cek outside untuk clock in dengan penanganan shift malam
+      let isOutside = false;
+      if (isOvernight) {
+          // Shift malam: valid jika clock in antara startTime s/d midnight ATAU midnight s/d endTime
+          // Contoh: shift 22:00-06:00, valid jika 22:00-23:59 ATAU 00:00-06:00
+          if (inMinutes >= shiftStartMinutes && inMinutes <= shiftEndMinutes) {
+              isOutside = false;
+          } else {
+              isOutside = true;
+          }
+      } else {
+          // Shift normal: outside jika clock in setelah endTime
+          if (inMinutes > shiftEndMinutes) {
+              isOutside = true;
+          }
+      }
+      
+      if (isOutside) {
           data.status = 'Outside';
       } else if (diffMinutes <= -earlyThreshold) {
           data.status = 'Early In';
@@ -277,22 +305,34 @@ function saveAttendanceData(data) {
       const [endH, endM] = safeShiftEnd.split(':').map(Number);
       
       const outMinutes = (outH || 0) * 60 + (outM || 0);
-      const shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
-      const shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
+      let shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
+      let shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
       
       // Handle shift malam yang melewati tengah malam (startTime > endTime)
+      let isOvernight = shiftStartMinutes > shiftEndMinutes;
+      let adjustedOutMinutes = outMinutes;
+      
+      if (isOvernight) {
+          // Untuk shift malam, tambah 24 jam pada endTime untuk perbandingan
+          shiftEndMinutes += 24 * 60;
+          // Jika clock out terjadi setelah tengah malam (misal 02:00), tambah 24 jam
+          if (adjustedOutMinutes < shiftStartMinutes && adjustedOutMinutes <= (shiftEndMinutes - 24 * 60)) {
+              adjustedOutMinutes += 24 * 60;
+          }
+      }
+      
+      // Cek outside untuk clock out dengan penanganan shift malam
       let isOutside = false;
-      if (shiftStartMinutes > shiftEndMinutes) {
-          // Shift malam: valid antara startTime s/d midnight DAN midnight s/d endTime
-          if (outMinutes < shiftEndMinutes && outMinutes >= startH * 60) {
-              // Ini tidak mungkin terjadi karena startH > endH, jadi kita cek sebaliknya
+      if (isOvernight) {
+          // Shift malam: valid jika clock out antara startTime s/d midnight ATAU midnight s/d endTime
+          // Contoh: shift 22:00-06:00, valid jika 22:00-23:59 ATAU 00:00-06:00
+          if (adjustedOutMinutes >= shiftStartMinutes && adjustedOutMinutes <= shiftEndMinutes) {
               isOutside = false;
-          } else if (outMinutes < shiftEndMinutes || outMinutes > shiftStartMinutes) {
-              // Di luar rentang shift malam
+          } else {
               isOutside = true;
           }
       } else {
-          // Shift normal: valid antara startTime s/d endTime
+          // Shift normal: outside jika clock out sebelum startTime atau setelah endTime
           if (outMinutes < shiftStartMinutes || outMinutes > shiftEndMinutes) {
               isOutside = true;
           }
