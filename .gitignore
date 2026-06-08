@@ -1,1 +1,1 @@
-Nothing should be ignored in this case, as the changes only include JavaScript source files (.js) which are core project files and not build artifacts, dependencies, or temporary files.
+(js/absensi.js is a source file, and there are no build artifacts, dependencies, or temp files in the changes)
