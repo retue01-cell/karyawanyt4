@@ -123,6 +123,11 @@ body {
     overflow-x: hidden;
 }
 
+/* Exception for shift schedule page - allow horizontal scroll */
+#page-shift-schedule body {
+    overflow-x: visible !important;
+}
+
 a {
     text-decoration: none;
     color: inherit;
@@ -644,6 +649,15 @@ img {
     flex: 1;
     padding: var(--spacing-lg);
     overflow-y: auto;
+    overflow-x: visible;
+}
+
+/* Shift Schedule page - allow horizontal scroll for table - FORCE with !important */
+#page-shift-schedule .page-content,
+#page-shift-schedule .shift-schedule-container,
+#page-shift-schedule .shift-schedule-table-wrapper,
+#page-shift-schedule .shift-schedule-table-container {
+    overflow-x: visible !important;
 }
 
 .page {

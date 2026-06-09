@@ -79,6 +79,48 @@ const shiftSchedule = {
     getDaysInMonth(month, year) { return new Date(year, month + 1, 0).getDate(); },
     getDayName(dayIndex) { return ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'][dayIndex]; },
 
+    // Adjust table width dynamically based on number of days in month
+    adjustTableWidth() {
+        const table = document.querySelector('.shift-schedule-table');
+        if (!table) return;
+        const daysInMonth = this.getDaysInMonth(this.currentMonth, this.currentYear);
+        // Assume 50px per date column, 200px for employee column
+        const minWidth = 200 + (daysInMonth * 50);
+        table.style.minWidth = minWidth + 'px';
+        table.style.width = 'auto';
+        console.log(`[ShiftSchedule] Table min-width set to ${minWidth}px for ${daysInMonth} days`);
+        
+        // Force wrapper to scroll
+        const wrapper = document.querySelector('.shift-schedule-table-wrapper');
+        if (wrapper) {
+            wrapper.style.overflowX = 'auto';
+            wrapper.style.webkitOverflowScrolling = 'touch';
+        }
+        const container = document.querySelector('.shift-schedule-table-container');
+        if (container) {
+            container.style.overflowX = 'auto';
+        }
+    },
+
+    // Debug function to check if scroll is working
+    checkScroll() {
+        const container = document.querySelector('.shift-schedule-table-container');
+        const table = document.querySelector('.shift-schedule-table');
+        if (container && table) {
+            const containerWidth = container.clientWidth;
+            const tableWidth = table.scrollWidth;
+            console.log(`[ShiftSchedule] Container width: ${containerWidth}, Table width: ${tableWidth}, Can scroll: ${tableWidth > containerWidth}`);
+            if (tableWidth > containerWidth) {
+                container.style.overflowX = 'auto';
+            } else {
+                console.warn('[ShiftSchedule] Table width is not greater than container, adjusting min-width');
+                const days = this.getDaysInMonth(this.currentMonth, this.currentYear);
+                const newMinWidth = 200 + (days * 50);
+                table.style.minWidth = newMinWidth + 'px';
+            }
+        }
+    },
+
     getFilteredEmployees() {
         return this.employees.filter(emp => {
             const matchDept = !this.filters.department || emp.department === this.filters.department;
@@ -177,6 +219,9 @@ const shiftSchedule = {
             }
             tbody.appendChild(tr);
         });
+        
+        // Adjust table width after rendering
+        this.adjustTableWidth();
     },
 
     // Fungsi baru: update lokal + simpan ke database langsung (sinkron dengan Portal Karyawan.xlsx)
@@ -329,6 +374,8 @@ const shiftSchedule = {
                 await this.loadData();
                 this.renderTable(); 
                 this.updateSummary();
+                this.adjustTableWidth(); // Ensure table width is adjusted after month change
+                this.checkScroll(); // Debug: verify scroll is working
             } finally {
                 this.hideLoading();
             }
