@@ -43,7 +43,7 @@ function ensureSheetHasHeaders(sheetName, headers) {
 function initDatabase() {
   const sheetsConfig = {
     'Users': ['id', 'name', 'email', 'password', 'role', 'avatar', 'createdAt'],
-    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password'],
+    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password', 'leaveBalance'],
     'Attendance': ['id', 'userId', 'date', 'shift', 'clockIn', 'clockOut', 'breakStart', 'breakEnd', 'overtimeStart', 'status', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp'],
     'Journals': ['id', 'userId', 'date', 'tasks', 'achievements', 'obstacles', 'plan', 'photo', 'updatedAt'],
     'Leaves': ['id', 'userId', 'type', 'typeLabel', 'startDate', 'endDate', 'duration', 'reason', 'status', 'appliedAt'],
@@ -105,12 +105,12 @@ function seedDefaultData() {
   const empSheet = getSheet('Employees');
   if (empSheet.getLastRow() <= 1) {
     const employees = [
-      [1, 'Ahmad Rizky', 'ahmad@company.com', 'IT', 'Developer', 'Pagi', 'active', '2024-01-15', 'https://ui-avatars.com/api/?name=Ahmad&background=3B82F6&color=fff', 'pass'],
-      [2, 'Budi Santoso', 'budi@company.com', 'HR', 'HR Manager', 'Pagi', 'active', '2023-06-01', 'https://ui-avatars.com/api/?name=Budi&background=10B981&color=fff', 'pass'],
-      [3, 'Citra Dewi', 'citra@company.com', 'Finance', 'Accountant', 'Pagi', 'on-leave', '2024-03-10', 'https://ui-avatars.com/api/?name=Citra&background=F59E0B&color=fff', ''],
-      [4, 'Dedi Pratama', 'dedi@company.com', 'Marketing', 'Marketing Staff', 'Siang', 'active', '2024-02-20', 'https://ui-avatars.com/api/?name=Dedi&background=EF4444&color=fff', ''],
-      [5, 'Eka Putri', 'eka@company.com', 'IT', 'UI/UX Designer', 'Pagi', 'active', '2024-01-05', 'https://ui-avatars.com/api/?name=Eka&background=8B5CF6&color=fff', 'pass'],
-      [6, 'Fajar Nugraha', 'fajar@company.com', 'Operations', 'Supervisor', 'Malam', 'inactive', '2023-09-12', 'https://ui-avatars.com/api/?name=Fajar&background=6B7280&color=fff', '']
+      [1, 'Ahmad Rizky', 'ahmad@company.com', 'IT', 'Developer', 'Pagi', 'active', '2024-01-15', 'https://ui-avatars.com/api/?name=Ahmad&background=3B82F6&color=fff', 'pass', 12],
+      [2, 'Budi Santoso', 'budi@company.com', 'HR', 'HR Manager', 'Pagi', 'active', '2023-06-01', 'https://ui-avatars.com/api/?name=Budi&background=10B981&color=fff', 'pass', 12],
+      [3, 'Citra Dewi', 'citra@company.com', 'Finance', 'Accountant', 'Pagi', 'on-leave', '2024-03-10', 'https://ui-avatars.com/api/?name=Citra&background=F59E0B&color=fff', '', 12],
+      [4, 'Dedi Pratama', 'dedi@company.com', 'Marketing', 'Marketing Staff', 'Siang', 'active', '2024-02-20', 'https://ui-avatars.com/api/?name=Dedi&background=EF4444&color=fff', '', 12],
+      [5, 'Eka Putri', 'eka@company.com', 'IT', 'UI/UX Designer', 'Pagi', 'active', '2024-01-05', 'https://ui-avatars.com/api/?name=Eka&background=8B5CF6&color=fff', 'pass', 12],
+      [6, 'Fajar Nugraha', 'fajar@company.com', 'Operations', 'Supervisor', 'Malam', 'inactive', '2023-09-12', 'https://ui-avatars.com/api/?name=Fajar&background=6B7280&color=fff', '', 12]
     ];
     employees.forEach(emp => empSheet.appendRow(emp));
   }
@@ -587,7 +587,7 @@ function rapikanDatabase() {
   
   const sheetsConfig = {
     'Users': ['id', 'name', 'email', 'password', 'role', 'avatar', 'createdAt'],
-    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password'],
+    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password', 'leaveBalance'],
     'Attendance': ['id', 'userId', 'date', 'shift', 'clockIn', 'clockOut', 'breakStart', 'breakEnd', 'overtimeStart', 'status', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp'],
     'Journals': ['id', 'userId', 'date', 'tasks', 'achievements', 'obstacles', 'plan', 'photo', 'updatedAt'],
     'Leaves': ['id', 'userId', 'type', 'typeLabel', 'startDate', 'endDate', 'duration', 'reason', 'status', 'appliedAt'],

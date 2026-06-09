@@ -45,6 +45,12 @@ function handleRequest(e) {
       case 'getEmployeeProfile':
         result = getEmployeeProfile(data.userId);
         break;
+      case 'updateEmployeeEmail':
+        result = updateEmployeeEmail(data.userId, data.newEmail, data.password);
+        break;
+      case 'updateEmployeeLeaveBalance':
+        result = updateEmployeeLeaveBalance(data.userId, data.leaveBalance);
+        break;
       case 'getAttendance':
         result = getAttendance(data.userId);
         break;

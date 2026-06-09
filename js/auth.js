@@ -79,17 +79,35 @@ const auth = {
             let user;
             if (result.success && result.data) {
                 // Backend mode - user from API (Employees or Users sheet)
+                // Normalisasi role dari backend agar konsisten dengan frontend
+                let rawRole = result.data.role || role;
+                // Trim spasi dan ubah ke lowercase untuk menangani variasi input
+                let normalizedRole = rawRole.trim().toLowerCase();
+                if (normalizedRole === 'karyawan') {
+                    normalizedRole = 'employee';
+                }
+                
                 user = {
                     id: result.data.id,
                     email: result.data.email,
                     name: result.data.name,
-                    role: result.data.role || role,
+                    role: normalizedRole,
                     department: result.data.department || '',
                     position: result.data.position || '',
                     shift: result.data.shift || '',
                     avatar: result.data.avatar || '',
                     loginTime: new Date().toISOString()
                 };
+                
+                // VALIDASI ROLE: Bandingkan role yang dipilih dengan role yang sudah dinormalisasi
+                if (normalizedRole !== role) {
+                    const roleName = role === 'admin' ? 'Admin' : 'Karyawan';
+                    const actualRoleName = normalizedRole === 'admin' ? 'Admin' : 'Karyawan';
+                    toast.error(`Anda memilih login sebagai ${roleName}, tetapi akun ini memiliki role ${actualRoleName}. Silakan pilih role yang sesuai.`);
+                    submitBtn.classList.remove('loading');
+                    submitBtn.disabled = false;
+                    return;
+                }
             } else if (result.success && !result.data && !API_BASE_URL) {
                 // Local-only fallback (no backend configured) - for testing only
                 const displayName = email.split('@')[0] || 'User';
@@ -108,6 +126,9 @@ const auth = {
                 return;
             }
 
+            // Hapus currentPage dari storage untuk mencegah override navigasi
+            storage.remove('currentPage');
+            
             this.currentUser = user;
             storage.set('session', user);
 
@@ -158,6 +179,9 @@ const auth = {
     },
 
     showApp() {
+        // Hapus currentPage yang tersimpan untuk mencegah override router
+        storage.remove('currentPage');
+        
         const loginContainer = document.getElementById('login-container');
         const appContainer = document.getElementById('app-container');
 
@@ -172,20 +196,40 @@ const auth = {
             const employeeMenu = document.getElementById('employee-menu');
             const adminMenu = document.getElementById('admin-menu-nav');
             const bottomNav = document.getElementById('bottom-nav');
+            const toggleBtn = document.getElementById('sidebar-toggle-mobile');
+            const body = document.body;
 
             if (this.currentUser && this.currentUser.role === 'admin') {
+                // Set admin-mode class on body for mobile sidebar
+                body.classList.add('admin-mode');
+                body.classList.remove('employee-mode');
+                
                 // Show admin menu, hide employee menu
                 if (employeeMenu) employeeMenu.classList.add('hidden');
                 if (adminMenu) adminMenu.classList.remove('hidden');
+                
+                // Hide bottom nav for admin
                 if (bottomNav) bottomNav.style.display = 'none';
+                
+                // Show hamburger toggle button for admin
+                if (toggleBtn) toggleBtn.style.display = 'flex';
 
                 // Navigate to admin dashboard
                 router.navigate('admin-dashboard');
             } else {
+                // Set employee-mode class on body
+                body.classList.add('employee-mode');
+                body.classList.remove('admin-mode');
+                
                 // Show employee menu, hide admin menu
                 if (employeeMenu) employeeMenu.classList.remove('hidden');
                 if (adminMenu) adminMenu.classList.add('hidden');
+                
+                // Show bottom nav for employee on mobile
                 if (bottomNav) bottomNav.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+                
+                // Hide hamburger toggle button for employee
+                if (toggleBtn) toggleBtn.style.display = 'none';
 
                 // Navigate to employee dashboard
                 router.navigate('dashboard');
@@ -209,6 +253,14 @@ const auth = {
             // Reset form
             const loginForm = document.getElementById('login-form');
             if (loginForm) loginForm.reset();
+            
+            // Refresh company data for login page display
+            if (window.refreshCompanyData) {
+                window.refreshCompanyData().then(() => {
+                    if (window.updateCompanyUI) window.updateCompanyUI();
+                    if (window.applyLoginDisplaySettings) window.applyLoginDisplaySettings();
+                });
+            }
             
             // Apply login display settings when showing login page
             if (window.applyLoginDisplaySettings) {

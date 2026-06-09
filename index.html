@@ -110,8 +110,8 @@
                         <li class="nav-item" data-page="izin"><a href="#" class="nav-link"><i class="fas fa-user-clock"></i><span>Izin / Sakit</span></a></li>
                         <li class="nav-item" data-page="jurnal"><a href="#" class="nav-link"><i class="fas fa-book"></i><span>Jurnal Kerja</span></a></li>
                         <li class="nav-item" data-page="cuti"><a href="#" class="nav-link"><i class="fas fa-calendar-alt"></i><span>Request Cuti</span></a></li>
+                        <li class="nav-item" data-page="account-settings"><a href="#" class="nav-link"><i class="fas fa-user-cog"></i><span>Pengaturan Akun</span></a></li>
                     </ul>
-                </div>
             </nav>
             <nav class="sidebar-nav admin-menu hidden" id="admin-menu-nav">
                 <div class="nav-section">
@@ -139,7 +139,10 @@
         <main class="main-content">
             <header class="top-bar">
                 <div class="top-bar-left">
-                    <!-- Tombol hamburger dihapus untuk mobile, navigasi menggunakan bottom bar -->
+                    <!-- Tombol hamburger untuk admin di mobile -->
+                    <button class="sidebar-toggle-mobile" id="sidebar-toggle-mobile" style="display: none;">
+                        <i class="fas fa-bars"></i>
+                    </button>
                     <h1 class="page-title" id="page-title">Dashboard</h1>
                 </div>
                 <div class="top-bar-right">
@@ -353,6 +356,19 @@
                                     <h3>Tampilan Halaman Login</h3>
                                 </div>
                                 <form id="login-display-form" class="settings-form">
+                                    <div class="form-group">
+                                        <label for="login-logo-url">URL Logo (opsional)</label>
+                                        <input type="text" id="login-logo-url" placeholder="https://...">
+                                        <small>Kosongkan untuk menggunakan ikon default</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="login-company-name-input">Nama Perusahaan</label>
+                                        <input type="text" id="login-company-name-input" placeholder="Nama perusahaan">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="login-tagline">Tagline / Subtitle</label>
+                                        <input type="text" id="login-tagline" placeholder="Kelola kehadiran & produktivitas dengan mudah">
+                                    </div>
                                     <div class="form-group">
                                         <label for="logo-shape">Bentuk Logo</label>
                                         <select id="logo-shape">
