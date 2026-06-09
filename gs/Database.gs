@@ -99,6 +99,7 @@ function seedDefaultData() {
     settingsSheet.appendRow(['diligent_threshold', '30']);
     settingsSheet.appendRow(['face_recognition', 'true']);
     settingsSheet.appendRow(['location_tracking', 'true']);
+    settingsSheet.appendRow(['default_leave_balance', '12']);
   }
 
   // Employees
