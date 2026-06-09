@@ -81,8 +81,9 @@ const auth = {
                 // Backend mode - user from API (Employees or Users sheet)
                 // Normalisasi role dari backend agar konsisten dengan frontend
                 let rawRole = result.data.role || role;
-                let normalizedRole = rawRole;
-                if (rawRole === 'karyawan') {
+                // Trim spasi dan ubah ke lowercase untuk menangani variasi input
+                let normalizedRole = rawRole.trim().toLowerCase();
+                if (normalizedRole === 'karyawan') {
                     normalizedRole = 'employee';
                 }
                 
