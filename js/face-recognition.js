@@ -13,25 +13,63 @@ const faceRecognition = {
     position: null,
     countdownTimer: null,
     countdownSeconds: 3,
+    isInitializing: false,
+    map: null,
+    locationSettings: null,      // untuk menyimpan setting toko
+    locationUpdateInterval: null, // untuk update waktu
 
     init(action) {
+        if (this.isInitializing) {
+            console.warn('Face recognition already initializing, skip');
+            return;
+        }
+        this.isInitializing = true;
+        
+        // Bersihkan stream dan map sebelumnya
+        this.cleanup();
+        
+        // Reset UI ke keadaan awal (tombol ambil foto muncul)
+        this.resetUI();
+        
         this.currentAction = action;
         this.photoCaptured = false;
         this.locationVerified = false;
         this.position = null;
         this.countdownTimer = null;
-
+        
         // Update UI based on action
         this.updateActionTitle(action);
+        
+        // Ambil setting lokasi toko dari backend
+        this.loadLocationSettings().then(() => {
+            setTimeout(() => {
+                this.initCamera();
+                this.initLocation();
+                this.bindButtons();
+                this.isInitializing = false;
+            }, 100);
+        }).catch(() => {
+            setTimeout(() => {
+                this.initCamera();
+                this.initLocation();
+                this.bindButtons();
+                this.isInitializing = false;
+            }, 100);
+        });
+    },
 
-        // Initialize camera
-        this.initCamera();
-
-        // Initialize location
-        this.initLocation();
-
-        // Bind buttons
-        this.bindButtons();
+    async loadLocationSettings() {
+        try {
+            const result = await api.request('getLocationSettings');
+            if (result.success) {
+                this.locationSettings = result.data;
+            } else {
+                this.locationSettings = null;
+            }
+        } catch (e) {
+            console.warn('Gagal ambil setting lokasi:', e);
+            this.locationSettings = null;
+        }
     },
 
     updateActionTitle(action) {
@@ -54,13 +92,30 @@ const faceRecognition = {
     },
 
     async initCamera() {
+        // Ambil ulang elemen setelah cleanup (bisa jadi DOM berubah)
         this.video = document.getElementById('camera-video');
         this.canvas = document.getElementById('camera-canvas');
 
-        if (!this.video) return;
+        if (!this.video) {
+            console.error('Video element not found');
+            toast.error('Elemen kamera tidak ditemukan');
+            this.isInitializing = false;
+            return;
+        }
+
+        // Hapus stream lama jika masih menempel
+        if (this.video.srcObject) {
+            const oldStream = this.video.srcObject;
+            if (oldStream && oldStream.getTracks) {
+                oldStream.getTracks().forEach(track => track.stop());
+            }
+            this.video.srcObject = null;
+        }
+
+        // Tampilkan video (hilangkan style none)
+        this.video.style.display = 'block';
 
         try {
-            // Request camera access
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'user',
@@ -72,23 +127,34 @@ const faceRecognition = {
 
             this.video.srcObject = this.stream;
 
-            // Enable capture button when video is ready
             this.video.onloadedmetadata = () => {
                 const captureBtn = document.getElementById('btn-capture');
                 if (captureBtn) {
                     captureBtn.disabled = false;
                 }
+                this.video.play().catch(e => console.warn('Video play error:', e));
+            };
+
+            this.video.onerror = (err) => {
+                console.error('Video error:', err);
+                toast.error('Gagal memuat kamera');
+                const captureBtn = document.getElementById('btn-capture');
+                if (captureBtn) captureBtn.disabled = true;
             };
 
         } catch (error) {
             console.error('Camera error:', error);
             toast.error('Tidak dapat mengakses kamera. Pastikan Anda memberikan izin kamera.');
+            const captureBtn = document.getElementById('btn-capture');
+            if (captureBtn) captureBtn.disabled = true;
+            this.isInitializing = false;
         }
     },
 
     initLocation() {
         if (!navigator.geolocation) {
             toast.error('Browser Anda tidak mendukung geolokasi');
+            this.updateLocationStatusUI('not_supported', 'Browser tidak support GPS');
             return;
         }
 
@@ -96,98 +162,135 @@ const faceRecognition = {
         const infoEl = document.getElementById('location-info');
         const mapEl = document.getElementById('location-map');
 
+        // Mulai update waktu realtime (setiap 1 detik)
+        this.startLocationTimeUpdater();
+
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 this.position = position;
-                this.locationVerified = true;
-
-                // Update status
-                if (statusEl) {
-                    statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Terverifikasi';
-                    statusEl.classList.add('verified');
+                
+                // Validasi lokasi terhadap setting toko
+                const isValid = this.validateLocation(position);
+                
+                if (isValid) {
+                    this.locationVerified = true;
+                    this.updateLocationStatusUI('verified', 'Lokasi Valid');
+                } else {
+                    this.locationVerified = false;
+                    this.updateLocationStatusUI('invalid', 'Lokasi Tidak Valid');
                 }
 
-                // Show location info
+                // Update info lokasi
                 if (infoEl) {
                     infoEl.style.display = 'block';
-
                     const coordsEl = document.getElementById('location-coords');
                     const addressEl = document.getElementById('location-address');
-                    const timeEl = document.getElementById('location-time');
                     const accuracyEl = document.getElementById('location-accuracy');
-
+                    
                     if (coordsEl) {
                         coordsEl.textContent = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
                     }
                     if (addressEl) {
-                        addressEl.textContent = 'Lokasi Valid';
-                    }
-                    if (timeEl) {
-                        timeEl.textContent = dateTime.getCurrentTime();
+                        addressEl.textContent = isValid ? '✓ Lokasi dalam radius toko' : '✗ Di luar radius toko';
                     }
                     if (accuracyEl) {
-                        accuracyEl.textContent = `±${Math.round(position.coords.accuracy)}m`;
+                        accuracyEl.textContent = `±${Math.round(position.coords.accuracy)} m`;
                     }
                 }
 
-                // Update map visualization dengan Leaflet
-                if (mapEl) {
-                    this.initMap(position);
-                }
-
+                // Inisialisasi peta (dengan perbaikan sebelumnya)
+                this.initMap(position);
                 this.checkCanSubmit();
             },
             (error) => {
                 console.error('Location error:', error);
-
-                // Fallback untuk testing di desktop/localhost
-                this.position = {
-                    coords: { latitude: -6.200000, longitude: 106.816666, accuracy: 100 } // Jakarta default
-                };
-                this.locationVerified = true;
-
-                if (statusEl) {
-                    statusEl.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--color-warning);"></i> Simulasi Lokasi';
-                }
-                toast.warning('Menggunakan lokasi simulasi karena GPS gagal.');
+                this.locationVerified = false;
+                this.updateLocationStatusUI('error', 'Gagal dapat lokasi');
                 
-                // Tampilkan fallback map
-                if (mapEl) {
-                    this.initMapFallback();
+                // Fallback untuk testing (opsional)
+                if (window.location.hostname === 'localhost') {
+                    const fallbackPos = { coords: { latitude: -6.200000, longitude: 106.816666, accuracy: 100 } };
+                    this.position = fallbackPos;
+                    const isValid = this.validateLocation(fallbackPos);
+                    this.locationVerified = isValid;
+                    this.updateLocationStatusUI(isValid ? 'verified' : 'invalid', isValid ? 'Lokasi Valid (simulasi)' : 'Lokasi Tidak Valid (simulasi)');
+                    this.initMap(fallbackPos);
                 }
-                
-                this.checkCanSubmit();
             },
-            {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
+    },
+
+    validateLocation(position) {
+        if (!this.locationSettings || !this.locationSettings.lat || !this.locationSettings.lng) {
+            // Jika admin belum setting lokasi toko, anggap valid (atau bisa juga false)
+            console.warn('Location settings not set, skipping validation');
+            return true; // atau false sesuai kebijakan
+        }
+        
+        const R = 6371e3;
+        const φ1 = position.coords.latitude * Math.PI/180;
+        const φ2 = this.locationSettings.lat * Math.PI/180;
+        const Δφ = (this.locationSettings.lat - position.coords.latitude) * Math.PI/180;
+        const Δλ = (this.locationSettings.lng - position.coords.longitude) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = R * c;
+        
+        const radius = this.locationSettings.radius || 100;
+        return distance <= radius;
+    },
+
+    updateLocationStatusUI(status, message) {
+        const statusEl = document.getElementById('location-status');
+        if (!statusEl) return;
+        
+        if (status === 'verified') {
+            statusEl.innerHTML = '<i class="fas fa-check-circle"></i> ' + message;
+            statusEl.classList.add('verified');
+            statusEl.classList.remove('invalid', 'error');
+        } else if (status === 'invalid') {
+            statusEl.innerHTML = '<i class="fas fa-times-circle"></i> ' + message;
+            statusEl.classList.add('invalid');
+            statusEl.classList.remove('verified', 'error');
+        } else if (status === 'error') {
+            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + message;
+            statusEl.classList.add('error');
+            statusEl.classList.remove('verified', 'invalid');
+        } else {
+            statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + message;
+        }
+    },
+
+    startLocationTimeUpdater() {
+        // Update waktu setiap detik
+        if (this.locationUpdateInterval) clearInterval(this.locationUpdateInterval);
+        this.locationUpdateInterval = setInterval(() => {
+            const timeEl = document.getElementById('location-time');
+            if (timeEl) {
+                timeEl.textContent = dateTime.getCurrentTime();
+            }
+        }, 1000);
     },
 
     bindButtons() {
         const captureBtn = document.getElementById('btn-capture');
         const retakeBtn = document.getElementById('btn-retake');
         const confirmBtn = document.getElementById('btn-confirm-attendance');
-
-        if (captureBtn) {
-            const newCaptureBtn = captureBtn.cloneNode(true);
-            captureBtn.parentNode.replaceChild(newCaptureBtn, captureBtn);
-            newCaptureBtn.addEventListener('click', (e) => { e.preventDefault(); this.capturePhoto(); });
-        }
-
-        if (retakeBtn) {
-            const newRetakeBtn = retakeBtn.cloneNode(true);
-            retakeBtn.parentNode.replaceChild(newRetakeBtn, retakeBtn);
-            newRetakeBtn.addEventListener('click', (e) => { e.preventDefault(); this.retakePhoto(); });
-        }
-
-        if (confirmBtn) {
-            const newConfirmBtn = confirmBtn.cloneNode(true);
-            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-            newConfirmBtn.addEventListener('click', (e) => { e.preventDefault(); this.confirmAttendance(); });
-        }
+        
+        const bindSafe = (element, handler) => {
+            if (!element) return;
+            const newEl = element.cloneNode(true);
+            element.parentNode?.replaceChild(newEl, element);
+            newEl.addEventListener('click', (e) => { e.preventDefault(); handler(); });
+            return newEl;
+        };
+        
+        bindSafe(captureBtn, () => this.capturePhoto());
+        bindSafe(retakeBtn, () => this.retakePhoto());
+        bindSafe(confirmBtn, () => this.confirmAttendance());
     },
 
     capturePhoto() {
@@ -229,48 +332,99 @@ const faceRecognition = {
     },
 
     retakePhoto() {
-        this.photoCaptured = false;
+        // Matikan stream lama
+        this.cleanup();
+        // Reset UI ke awal
+        this.resetUI();
+        // Mulai ulang kamera
+        setTimeout(() => {
+            this.initCamera();
+            this.initLocation(); // lokasi tetap bisa diambil ulang
+            this.bindButtons();
+        }, 100);
+    },
 
-        // Reset preview
-        const preview = document.getElementById('camera-preview');
-        if (preview) {
-            preview.innerHTML = `
-                <video id="camera-video" autoplay playsinline></video>
-                <canvas id="camera-canvas" style="display: none;"></canvas>
-                <div class="face-overlay" id="face-overlay">
-                    <div class="face-frame">
-                        <div class="face-corner top-left"></div>
-                        <div class="face-corner top-right"></div>
-                        <div class="face-corner bottom-left"></div>
-                        <div class="face-corner bottom-right"></div>
-                    </div>
-                    <div class="face-guide">
-                        <i class="fas fa-camera"></i>
-                        <p>Posisikan wajah di dalam frame</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Update buttons
+    resetUI() {
+        // Reset tombol
         const captureBtn = document.getElementById('btn-capture');
         const retakeBtn = document.getElementById('btn-retake');
-
+        const confirmBtn = document.getElementById('btn-confirm-attendance');
+        
         if (captureBtn) {
             captureBtn.style.display = 'flex';
-            captureBtn.disabled = true;
+            captureBtn.disabled = true; // akan aktif setelah video ready
         }
-        if (retakeBtn) retakeBtn.style.display = 'none';
-
-        // Reinitialize camera
-        this.initCamera();
-        this.checkCanSubmit();
+        if (retakeBtn) {
+            retakeBtn.style.display = 'none';
+            retakeBtn.disabled = false;
+        }
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+        }
+        
+        // Reset preview container ke struktur awal (tanpa foto)
+        const preview = document.getElementById('camera-preview');
+        if (preview) {
+            // Hanya reset jika perlu, jangan hancurkan video element yang sedang dipakai
+            const existingVideo = preview.querySelector('#camera-video');
+            if (!existingVideo) {
+                preview.innerHTML = `
+                    <video id="camera-video" autoplay playsinline></video>
+                    <canvas id="camera-canvas" style="display: none;"></canvas>
+                    <div class="face-overlay" id="face-overlay">
+                        <div class="face-frame">
+                            <div class="face-corner top-left"></div>
+                            <div class="face-corner top-right"></div>
+                            <div class="face-corner bottom-left"></div>
+                            <div class="face-corner bottom-right"></div>
+                        </div>
+                        <div class="face-guide">
+                            <i class="fas fa-camera"></i>
+                            <p>Posisikan wajah di dalam frame</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Hapus gambar hasil capture jika ada
+                const capturedImg = preview.querySelector('img');
+                if (capturedImg) capturedImg.remove();
+                // Pastikan video muncul
+                existingVideo.style.display = 'block';
+                const overlay = preview.querySelector('.face-overlay');
+                if (overlay) overlay.style.display = 'flex';
+            }
+        }
+        
+        // Hapus status verifikasi
+        const statusDiv = document.getElementById('verification-status');
+        if (statusDiv) statusDiv.classList.remove('show');
+        
+        // Reset flag
+        this.photoCaptured = false;
+        this.currentPhoto = null;
+        // Jangan reset locationVerified di sini, biar tetap menunggu lokasi baru
+        
+        // Hapus interval update waktu jika ada
+        if (this.locationUpdateInterval) {
+            clearInterval(this.locationUpdateInterval);
+            this.locationUpdateInterval = null;
+        }
     },
 
     stopCamera() {
         if (this.stream) {
-            this.stream.getTracks().forEach(track => track.stop());
+            this.stream.getTracks().forEach(track => {
+                if (track.readyState === 'live') track.stop();
+            });
             this.stream = null;
+        }
+        
+        // Bersihkan video element juga
+        if (this.video) {
+            if (this.video.srcObject) {
+                this.video.srcObject = null;
+            }
+            this.video.pause();
         }
     },
 
@@ -298,11 +452,24 @@ const faceRecognition = {
         const mapContainer = document.getElementById('location-map');
         if (!mapContainer) return;
 
+        // === PERBAIKAN 1: Hancurkan map sebelumnya ===
+        if (this.map) {
+            try {
+                this.map.remove();
+            } catch(e) {
+                console.warn('Gagal menghapus map lama:', e);
+            }
+            this.map = null;
+        }
+
         // Bersihkan container
         mapContainer.innerHTML = '';
         
-        // Buat peta Leaflet
-        const map = L.map(mapContainer).setView([position.coords.latitude, position.coords.longitude], 15);
+        // Buat peta Leaflet (tambahkan opsi zoom control untuk debugging)
+        const map = L.map(mapContainer, {
+            zoomControl: true,
+            fadeAnimation: false  // hindari efek fade yang bisa ganggu
+        }).setView([position.coords.latitude, position.coords.longitude], 15);
         
         // Tile layer (peta dasar) dari CartoDB
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -334,10 +501,17 @@ const faceRecognition = {
         // Simpan instance map untuk keperluan lain (opsional)
         this.map = map;
         
-        // Fix rendering di mobile
+        // === PERBAIKAN 2: invalidateSize dengan delay lebih andal ===
         setTimeout(() => {
-            map.invalidateSize();
-        }, 100);
+            if (this.map) {
+                this.map.invalidateSize();
+            }
+        }, 200);
+        
+        // Tambahkan event listener untuk resize window
+        window.addEventListener('resize', () => {
+            if (this.map) this.map.invalidateSize();
+        });
     },
 
     initMapFallback() {
@@ -442,12 +616,32 @@ const faceRecognition = {
 
     // Cleanup when leaving page
     cleanup() {
-        this.stopCamera();
+        // Hentikan stream kamera
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        if (this.video) {
+            if (this.video.srcObject) this.video.srcObject = null;
+            this.video.pause();
+            this.video.src = '';
+        }
+        // Hancurkan map
+        if (this.map) {
+            try { this.map.remove(); } catch(e) {}
+            this.map = null;
+        }
+        // Hentikan interval update waktu
+        if (this.locationUpdateInterval) {
+            clearInterval(this.locationUpdateInterval);
+            this.locationUpdateInterval = null;
+        }
         if (this.countdownTimer) {
             clearInterval(this.countdownTimer);
             this.countdownTimer = null;
         }
-    }
+        // Jangan reset tombol di sini, biar resetUI() yang mengatur
+    },
 };
 
 // Global init function
@@ -455,10 +649,24 @@ window.initFaceRecognition = (action) => {
     faceRecognition.init(action);
 };
 
-// Cleanup on page change
+// Event visibilitychange untuk menghemat resource saat tab tidak aktif
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        faceRecognition.cleanup();
+    if (document.hidden && window.faceRecognition) {
+        // Hentikan stream kamera
+        if (window.faceRecognition.stream) {
+            window.faceRecognition.stream.getTracks().forEach(track => track.stop());
+            window.faceRecognition.stream = null;
+        }
+        if (window.faceRecognition.video) {
+            window.faceRecognition.video.srcObject = null;
+        }
+        // Cleanup map
+        if (window.faceRecognition.map) {
+            try {
+                window.faceRecognition.map.remove();
+            } catch(e) {}
+            window.faceRecognition.map = null;
+        }
     }
 });
 
