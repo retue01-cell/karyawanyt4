@@ -55,7 +55,7 @@ function handleRequest(e) {
         result = getAttendance(data.userId);
         break;
       case 'getTodayAttendance':
-        result = getTodayAttendance(data.userId);
+        result = getTodayAttendance(data.userId, data.date);
         break;
       case 'saveAttendance':
         result = saveAttendanceData(data);
@@ -164,6 +164,9 @@ function handleRequest(e) {
         break;
       case 'saveShiftScheduleItem':
         result = saveShiftScheduleItemData(data.userId, data.date, data.shift);
+        break;
+      case 'getApprovedLeavesForMonth':
+        result = { success: true, data: getApprovedLeavesAndIzinForMonth(data.yearMonth) };
         break;
       case 'getLocationSettings':
         result = { success: true, data: getLocationSettings() };

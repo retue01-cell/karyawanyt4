@@ -11,10 +11,8 @@ const absensi = {
     processing: false,
 
     async init() {
-        if (this.isInitialized) {
-            console.log('Absensi sudah diinisialisasi, skip duplicate init');
-            return;
-        }
+        // Selalu muat ulang data setiap kali halaman absensi dibuka
+        // untuk memastikan sinkronisasi dengan server
         console.log('Initializing absensi page...');
         loadingIndicator.show('Memuat data absensi...');
         try {
@@ -26,7 +24,7 @@ const absensi = {
             this.initButtons();
             this.renderTimeline();
             this.updateUI();
-            this.isInitialized = true;
+            // isInitialized tidak lagi digunakan agar data selalu fresh
 
             // Debug button state
             setTimeout(() => {
@@ -71,6 +69,14 @@ const absensi = {
             }
 
             let todayAttendance = result?.data || {};
+
+            // CEK APAKAH HARI INI DIBLOKIR (cuti/izin)
+            if (todayAttendance.isBlocked) {
+                this.currentState = 'blocked';
+                this.attendanceData = todayAttendance;
+                this.updateUIBlocked();
+                return;
+            }
 
             if (!todayAttendance.date) {
                 const today = dateTime.getLocalDate();
@@ -171,29 +177,52 @@ const absensi = {
             return;
         }
 
+        // Mapping status ke badge
+        const getStatusBadge = (status) => {
+            if (!status) return '<span class="badge-status secondary">Waiting</span>';
+            
+            const s = status.toLowerCase();
+            const map = {
+                'on time': { class: 'success', label: 'On Time' },
+                'tepat': { class: 'success', label: 'Tepat Waktu' },
+                'tepat waktu': { class: 'success', label: 'Tepat Waktu' },
+                'ontime': { class: 'success', label: 'On Time' },
+                'early in': { class: 'info', label: 'Early In' },
+                'rajin': { class: 'success', label: 'Rajin' },
+                'terlambat': { class: 'warning', label: 'Terlambat' },
+                'late': { class: 'warning', label: 'Terlambat' },
+                'late & early out': { class: 'danger', label: 'Late & Early Out' },
+                'early out': { class: 'warning', label: 'Early Out' },
+                'outside': { class: 'danger', label: 'Outside' },
+                'lembur': { class: 'warning', label: 'Lembur' },
+                'incomplete': { class: 'secondary', label: 'Incomplete' },
+                'alpha': { class: 'danger', label: 'Alpha' },
+                'cuti': { class: 'info', label: 'Cuti' },
+                'cuti tahunan': { class: 'info', label: 'Cuti' },
+                'cuti sakit': { class: 'info', label: 'Cuti Sakit' },
+                'sakit': { class: 'info', label: 'Sakit' },
+                'izin': { class: 'info', label: 'Izin' },
+                'izin penting': { class: 'info', label: 'Izin Penting' },
+                'keadaan darurat': { class: 'info', label: 'Keadaan Darurat' },
+                'dinas luar': { class: 'info', label: 'Dinas Luar' },
+                'libur': { class: 'secondary', label: 'Libur' },
+                'waiting': { class: 'secondary', label: 'Menunggu' }
+            };
+            
+            for (const [key, val] of Object.entries(map)) {
+                if (s === key) {
+                    return `<span class="badge-status ${val.class}">${val.label}</span>`;
+                }
+            }
+            // Fallback: tampilkan status asli
+            return `<span class="badge-status secondary">${status}</span>`;
+        };
+
         tbody.innerHTML = historyData.slice(0, 10).map(record => {
             // Calculate duration using the shared utility function
             let duration = '--';
             if (record.clockIn && record.clockOut) {
                 duration = dateTime.calculateDuration(record.clockIn, record.clockOut);
-            }
-
-            // Status Badge
-            let statusBadge = '<span class="badge-status">Waiting</span>';
-            if (record.status && record.status.toLowerCase() === 'ontime') {
-                statusBadge = '<span class="badge-status success">Tepat Waktu</span>';
-            } else if (record.status && record.status.toLowerCase() === 'tepat') {
-                statusBadge = '<span class="badge-status success">Tepat Waktu</span>';
-            } else if (record.status && record.status.toLowerCase() === 'early in') {
-                statusBadge = '<span class="badge-status info">Early In</span>';
-            } else if (record.status && record.status.toLowerCase() === 'rajin') {
-                statusBadge = '<span class="badge-status success">Rajin</span>';
-            } else if (record.status && (record.status.toLowerCase() === 'terlambat' || record.status.toLowerCase() === 'late')) {
-                statusBadge = '<span class="badge-status warning">Terlambat</span>';
-            } else if (record.status && record.status.toLowerCase() === 'outside') {
-                statusBadge = '<span class="badge-status danger">Outside</span>';
-            } else if (record.status && record.status.toLowerCase() === 'lembur') {
-                statusBadge = '<span class="badge-status warning">Lembur</span>';
             }
 
             // Format date to local standard UI string
@@ -208,7 +237,7 @@ const absensi = {
                     <td>${record.clockIn || '--:--'}</td>
                     <td>${record.clockOut || '--:--'}</td>
                     <td>${duration}</td>
-                    <td>${statusBadge}</td>
+                    <td>${getStatusBadge(record.status)}</td>
                 </tr>
             `;
         }).join('');
@@ -440,64 +469,81 @@ const absensi = {
 
         const now = new Date();
         const timeStr = dateTime.formatTime(now);
+        
+        // Simpan state asli untuk rollback jika gagal
+        const originalData = JSON.parse(JSON.stringify(this.attendanceData));
+        const originalState = this.currentState;
 
-        switch (action) {
-            case 'clock-in':
-                this.attendanceData.clockIn = timeStr;
-                this.attendanceData.status = 'ontime';
-                this.currentState = 'clocked-in';
-                toast.success(`Clock In berhasil: ${timeStr}`);
-                break;
-            case 'break':
-                this.attendanceData.breakStart = timeStr;
-                this.currentState = 'on-break';
-                toast.info(`Mulai istirahat: ${timeStr}`);
-                break;
-            case 'after-break':
-                this.attendanceData.breakEnd = timeStr;
-                this.currentState = 'clocked-in';
-                toast.success(`Selesai istirahat: ${timeStr}`);
-                break;
-            case 'overtime':
-                this.attendanceData.overtimeStart = timeStr;
-                // Simpan flag ke storage untuk mencegah double klik bahkan jika data belum tersimpan ke server
-                storage.set('temp_overtime_started', true);
-                toast.info(`Mulai lembur: ${timeStr}`);
-                break;
-            case 'clock-out':
-                this.attendanceData.clockOut = timeStr;
-                this.currentState = 'completed';
-                toast.success(`Clock Out berhasil: ${timeStr}`);
-                break;
-        }
-
-        // Save verification data - gunakan field name yang dikenali backend
-        this.attendanceData.verificationPhoto = verificationData.photo || null;
-        this.attendanceData.verificationLocation = verificationData.location ? JSON.stringify(verificationData.location) : '';
-        this.attendanceData.verificationTimestamp = verificationData.timestamp || new Date().toISOString();
-
-        await this.saveAttendance();
-        this.updateUI();
-        this.renderTimeline();
-
-        // Refresh dashboard setelah absensi untuk update statistik
-        if (window.dashboard) {
-            try {
-                await window.dashboard.loadData();
-                window.dashboard.updateStats();
-                window.dashboard.updateSessionInfo();
-            } catch (e) {
-                console.error('Error refreshing dashboard:', e);
+        try {
+            switch (action) {
+                case 'clock-in':
+                    this.attendanceData.clockIn = timeStr;
+                    this.attendanceData.status = 'ontime';
+                    this.currentState = 'clocked-in';
+                    toast.success(`Clock In berhasil: ${timeStr}`);
+                    break;
+                case 'break':
+                    this.attendanceData.breakStart = timeStr;
+                    this.currentState = 'on-break';
+                    toast.info(`Mulai istirahat: ${timeStr}`);
+                    break;
+                case 'after-break':
+                    this.attendanceData.breakEnd = timeStr;
+                    this.currentState = 'clocked-in';
+                    toast.success(`Selesai istirahat: ${timeStr}`);
+                    break;
+                case 'overtime':
+                    this.attendanceData.overtimeStart = timeStr;
+                    // Simpan flag ke storage untuk mencegah double klik bahkan jika data belum tersimpan ke server
+                    storage.set('temp_overtime_started', true);
+                    toast.info(`Mulai lembur: ${timeStr}`);
+                    break;
+                case 'clock-out':
+                    this.attendanceData.clockOut = timeStr;
+                    this.currentState = 'completed';
+                    toast.success(`Clock Out berhasil: ${timeStr}`);
+                    break;
             }
-        }
 
-        // Refresh shift info setelah clock out untuk konsistensi dashboard
-        if (action === 'clock-out' && window.dashboard) {
-            await window.dashboard.refreshShiftInfo();
-        }
+            // Save verification data - gunakan field name yang dikenali backend
+            this.attendanceData.verificationPhoto = verificationData.photo || null;
+            this.attendanceData.verificationLocation = verificationData.location ? JSON.stringify(verificationData.location) : '';
+            this.attendanceData.verificationTimestamp = verificationData.timestamp || new Date().toISOString();
 
-        // Clean up temp data
-        storage.remove('temp_attendance');
+            // Simpan ke server
+            await this.saveAttendance();
+
+            // Jika berhasil, update UI dan bersihkan temp
+            this.updateUI();
+            this.renderTimeline();
+            storage.remove('temp_attendance');
+
+            // Refresh dashboard setelah absensi untuk update statistik
+            if (window.dashboard) {
+                try {
+                    await window.dashboard.loadData();
+                    window.dashboard.updateStats();
+                    window.dashboard.updateSessionInfo();
+                } catch (e) {
+                    console.error('Error refreshing dashboard:', e);
+                }
+            }
+
+            // Refresh shift info setelah clock out untuk konsistensi dashboard
+            if (action === 'clock-out' && window.dashboard) {
+                await window.dashboard.refreshShiftInfo();
+            }
+        } catch (error) {
+            console.error('Gagal menyimpan absensi:', error);
+            // Rollback state ke kondisi semula
+            this.attendanceData = originalData;
+            this.currentState = originalState;
+            // Hapus flag overtime jika rollback
+            if (action === 'overtime') {
+                storage.remove('temp_overtime_started');
+            }
+            toast.error(error.message || 'Gagal menyimpan data. Silakan coba lagi.');
+        }
     },
 
     async saveAttendance() {
@@ -511,9 +557,12 @@ const absensi = {
                 // Gabungkan data server dengan data lokal, jangan timpa sepenuhnya
                 // Ini penting agar clockOut yang baru diset tidak hilang
                 this.attendanceData = { ...this.attendanceData, ...result.data };
+            } else {
+                throw new Error(result?.error || 'Gagal menyimpan absensi');
             }
         } catch (error) {
             console.error('Error saving attendance:', error);
+            throw error;
         } finally {
             loadingIndicator.hide();
         }
@@ -535,6 +584,11 @@ const absensi = {
                              this.attendanceData.status.toLowerCase() === 'lembur';
 
             switch (this.currentState) {
+                case 'blocked':
+                    statusRing.classList.add('completed');
+                    if (statusText) statusText.textContent = this.attendanceData.shift || 'Tidak Bekerja';
+                    if (statusSubtext) statusSubtext.textContent = `Anda sedang ${this.attendanceData.status} pada hari ini. Tidak dapat melakukan absensi.`;
+                    break;
                 case 'libur':
                     statusRing.classList.add('waiting'); // Reuse waiting style or custom if desired
                     if (statusText) statusText.textContent = 'Hari Libur';
@@ -591,6 +645,14 @@ const absensi = {
         const btnAfterBreak = document.getElementById('btn-after-break');
         const btnOvertime = document.getElementById('btn-overtime');
         const btnClockOut = document.getElementById('btn-clock-out');
+
+        // Jika dalam keadaan blocked (cuti/izin), nonaktifkan semua tombol
+        if (this.currentState === 'blocked') {
+            [btnClockIn, btnBreak, btnAfterBreak, btnOvertime, btnClockOut].forEach(btn => {
+                if (btn) btn.disabled = true;
+            });
+            return;
+        }
 
         const isClockedIn = this.attendanceData.clockIn && this.attendanceData.clockIn !== '';
         const isClockedOut = this.attendanceData.clockOut && this.attendanceData.clockOut !== '';
@@ -649,6 +711,11 @@ const absensi = {
                 document.getElementById('clock-out-time').textContent = this.attendanceData.clockOut;
             }
         }
+    },
+
+    updateUIBlocked() {
+        // Method khusus untuk menampilkan UI saat diblokir (cuti/izin)
+        this.updateUI();
     },
 
     updateShiftDisplay() {
@@ -731,7 +798,6 @@ const absensi = {
 
     // Reset method untuk membersihkan state saat logout atau navigasi keluar
     reset() {
-        this.isInitialized = false;
         this.processing = false;
         if (this.liveClockInterval) {
             clearInterval(this.liveClockInterval);
@@ -741,6 +807,7 @@ const absensi = {
         this.attendanceData = {};
         // Hapus flag overtime saat reset
         storage.remove('temp_overtime_started');
+        // isInitialized tidak lagi digunakan, tapi biarkan field ini ada untuk kompatibilitas
     }
 };
 

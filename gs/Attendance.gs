@@ -3,6 +3,36 @@
  * Attendance/Clock In-Out endpoints with date-specific shift definitions
  */
 
+/**
+ * Mengecek apakah karyawan memiliki izin/cuti yang disetujui pada tanggal tertentu
+ * @param {string} userId - ID karyawan
+ * @param {string} dateStr - tanggal (YYYY-MM-DD)
+ * @returns {Object|null} - data izin/cuti jika ada, null jika tidak
+ */
+function getApprovedLeaveOrIzin(userId, dateStr) {
+  const leaves = getAllRows('Leaves');
+  const approvedLeave = leaves.find(l => 
+    String(l.userId) === String(userId) &&
+    l.status === 'approved' &&
+    _parseDateToYMD(l.startDate) <= dateStr &&
+    _parseDateToYMD(l.endDate) >= dateStr
+  );
+  if (approvedLeave) {
+    return { type: 'cuti', typeLabel: approvedLeave.typeLabel };
+  }
+
+  const izins = getAllRows('Izin');
+  const approvedIzin = izins.find(i => 
+    String(i.userId) === String(userId) &&
+    i.status === 'approved' &&
+    _parseDateToYMD(i.date) === dateStr
+  );
+  if (approvedIzin) {
+    return { type: 'izin', typeLabel: approvedIzin.typeLabel };
+  }
+  return null;
+}
+
 function _parseDateToYMD(val) {
   if (!val) return '';
   if (val instanceof Date) {
@@ -89,17 +119,49 @@ function getAttendance(userId) {
   return { success: true, data: rows };
 }
 
-function getTodayAttendance(userId) {
+function getTodayAttendance(userId, dateStr) {
   if (!userId) {
     return { success: false, error: 'userId is required' };
   }
   
-  const today = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+  // Tentukan tanggal: prioritaskan dari parameter, fallback ke waktu server Asia/Jakarta
+  let today;
+  if (dateStr) {
+    today = _parseDateToYMD(dateStr);
+  } else {
+    today = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+  }
+  
   const allRows = getAllRows('Attendance');
   
   const todayRecord = allRows.find(row => 
     String(row.userId) === String(userId) && _parseDateToYMD(row.date) === today
   );
+  
+  // CEK APAKAH ADA IZIN/CUTI YANG DISETUJUI
+  const approved = getApprovedLeaveOrIzin(userId, today);
+  if (approved) {
+    // Override data attendance: tidak boleh absen, status = jenis cuti/izin
+    return {
+      success: true,
+      data: {
+        id: null,
+        userId: userId,
+        date: today,
+        shift: approved.typeLabel, // misal "Cuti Tahunan", "Sakit", "Dinas Luar"
+        clockIn: null,
+        clockOut: null,
+        breakStart: null,
+        breakEnd: null,
+        overtimeStart: null,
+        status: approved.typeLabel, // status untuk keperluan UI
+        verificationPhoto: '',
+        verificationLocation: '',
+        verificationTimestamp: '',
+        isBlocked: true // flag khusus frontend
+      }
+    };
+  }
   
   if (todayRecord) {
     todayRecord.date = _parseDateToYMD(todayRecord.date);
@@ -152,6 +214,12 @@ function getTodayAttendance(userId) {
 function saveAttendanceData(data) {
   if (!data.userId || !data.date) {
     return { success: false, error: 'userId and date are required' };
+  }
+  
+  // CEK APAKAH ADA IZIN/CUTI YANG DISETUJUI - tolak absensi
+  const approved = getApprovedLeaveOrIzin(data.userId, data.date);
+  if (approved) {
+    return { success: false, error: `Anda sedang ${approved.typeLabel} pada tanggal ini, tidak dapat melakukan absensi.` };
   }
   
   // If clocking in, determine if ontime or late menggunakan shift berdasarkan tanggal
@@ -251,15 +319,96 @@ function saveAttendanceData(data) {
       } else if (diffMinutes <= -diligentThreshold) {
           data.status = 'Rajin';
       } else if (diffMinutes <= lateTolerance) {
-          data.status = 'Tepat';
+          data.status = 'On Time'; // ubah dari 'Tepat' menjadi 'On Time'
       } else {
           data.status = 'Terlambat';
       }
   }
   
+  // Setelah data lengkap (clockIn dan clockOut ada), kita hitung ulang status
+  if (data.clockIn && data.clockOut) {
+      const dateStr = _parseDateToYMD(data.date);
+      const shiftDef = _getShiftForDate(data.shift, dateStr);
+      let shiftStartTimeStr = "08:00";
+      let shiftEndTimeStr = "17:00";
+      
+      if (shiftDef) {
+          if (shiftDef.startTime) {
+              if (shiftDef.startTime instanceof Date) {
+                  const h = String(shiftDef.startTime.getHours()).padStart(2, '0');
+                  const m = String(shiftDef.startTime.getMinutes()).padStart(2, '0');
+                  shiftStartTimeStr = h + ':' + m;
+              } else {
+                  shiftStartTimeStr = String(shiftDef.startTime).substring(0, 5);
+              }
+          }
+          if (shiftDef.endTime) {
+              if (shiftDef.endTime instanceof Date) {
+                  const h = String(shiftDef.endTime.getHours()).padStart(2, '0');
+                  const m = String(shiftDef.endTime.getMinutes()).padStart(2, '0');
+                  shiftEndTimeStr = h + ':' + m;
+              } else {
+                  shiftEndTimeStr = String(shiftDef.endTime).substring(0, 5);
+              }
+          }
+      } else {
+          const fallbackShift = getAllRows('Shifts').find(s => s.name === data.shift && (!s.date || s.date === ''));
+          if (fallbackShift) {
+              if (fallbackShift.startTime) {
+                  shiftStartTimeStr = String(fallbackShift.startTime).substring(0,5);
+              }
+              if (fallbackShift.endTime) {
+                  shiftEndTimeStr = String(fallbackShift.endTime).substring(0,5);
+              }
+          }
+      }
+      
+      const safeClockIn = String(data.clockIn).replace('.', ':');
+      const safeClockOut = String(data.clockOut).replace('.', ':');
+      const safeShiftStart = String(shiftStartTimeStr).replace('.', ':');
+      const safeShiftEnd = String(shiftEndTimeStr).replace('.', ':');
+      
+      const [inH, inM] = safeClockIn.split(':').map(Number);
+      const [outH, outM] = safeClockOut.split(':').map(Number);
+      const [startH, startM] = safeShiftStart.split(':').map(Number);
+      const [endH, endM] = safeShiftEnd.split(':').map(Number);
+      
+      let inMinutes = (inH || 0) * 60 + (inM || 0);
+      let outMinutes = (outH || 0) * 60 + (outM || 0);
+      let shiftStartMinutes = (startH || 0) * 60 + (startM || 0);
+      let shiftEndMinutes = (endH || 0) * 60 + (endM || 0);
+      
+      // Penanganan shift malam (start > end)
+      let isOvernight = shiftStartMinutes > shiftEndMinutes;
+      if (isOvernight) {
+          shiftEndMinutes += 24 * 60;
+          if (inMinutes < shiftStartMinutes) inMinutes += 24 * 60;
+          if (outMinutes < shiftStartMinutes) outMinutes += 24 * 60;
+      }
+      
+      const settingsRows = getAllRows('Settings');
+      const lateTolerance = parseInt((settingsRows.find(s => String(s.key) === 'late_tolerance') || {}).value || '15', 10);
+      
+      const isLate = (inMinutes > shiftStartMinutes + lateTolerance);
+      const isEarlyOut = (outMinutes < shiftEndMinutes);
+      
+      let finalStatus = '';
+      if (isLate && isEarlyOut) finalStatus = 'Late & Early Out';
+      else if (isLate) finalStatus = 'Terlambat';
+      else if (isEarlyOut) finalStatus = 'Early Out';
+      else finalStatus = 'On Time';
+      
+      // Jika ada status 'Outside' atau 'Lembur' dari sebelumnya, prioritaskan
+      if (data.status === 'Outside') finalStatus = 'Outside';
+      else if (data.status === 'Lembur') finalStatus = 'Lembur';
+      
+      data.status = finalStatus;
+  }
+  
   // Cek outside untuk clock out
   if (data.clockOut) {
       const settingsRows = getAllRows('Settings');
+      const outsideTolerance = parseInt((settingsRows.find(s => String(s.key) === 'outside_tolerance') || {}).value || '120', 10);
       const dateStr = _parseDateToYMD(data.date);
       const shiftDef = _getShiftForDate(data.shift, dateStr);
       let shiftStartTimeStr = "08:00";
@@ -321,19 +470,16 @@ function saveAttendanceData(data) {
           }
       }
       
-      // Cek outside untuk clock out dengan penanganan shift malam
+      // Cek outside untuk clock out dengan penanganan shift malam dan toleransi
       let isOutside = false;
       if (isOvernight) {
-          // Shift malam: valid jika clock out antara startTime s/d midnight ATAU midnight s/d endTime
-          // Contoh: shift 22:00-06:00, valid jika 22:00-23:59 ATAU 00:00-06:00
-          if (adjustedOutMinutes >= shiftStartMinutes && adjustedOutMinutes <= shiftEndMinutes) {
-              isOutside = false;
-          } else {
+          // Shift malam: outside jika clock out sebelum startTime atau setelah endTime + tolerance
+          if (adjustedOutMinutes < shiftStartMinutes || adjustedOutMinutes > shiftEndMinutes + outsideTolerance) {
               isOutside = true;
           }
       } else {
-          // Shift normal: outside jika clock out sebelum startTime atau setelah endTime
-          if (outMinutes < shiftStartMinutes || outMinutes > shiftEndMinutes) {
+          // Shift normal: outside jika clock out sebelum startTime atau setelah endTime + tolerance
+          if (outMinutes < shiftStartMinutes || outMinutes > shiftEndMinutes + outsideTolerance) {
               isOutside = true;
           }
       }
@@ -398,7 +544,11 @@ function saveAttendanceData(data) {
   if (existing && existing.id) {
     // Update existing record
     const updated = updateRow('Attendance', existing.id, data);
-    return { success: true, data: updated };
+    if (updated) {
+      return { success: true, data: updated };
+    } else {
+      return { success: false, error: 'Gagal mengupdate data absensi. Silakan coba lagi.' };
+    }
   } else {
     // Create new record
     data.id = getNextId('Attendance');

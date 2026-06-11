@@ -100,6 +100,7 @@ function seedDefaultData() {
     settingsSheet.appendRow(['face_recognition', 'true']);
     settingsSheet.appendRow(['location_tracking', 'true']);
     settingsSheet.appendRow(['default_leave_balance', '12']);
+    settingsSheet.appendRow(['outside_tolerance', '120']); // Batas toleransi clock out (menit) sebelum dianggap Outside
   }
 
   // Employees
@@ -629,4 +630,60 @@ function rapikanDatabase() {
   }
   
   return { success: true, message: 'Database berhasil dirapikan!' };
+}
+
+/**
+ * Mendapatkan semua cuti dan izin yang disetujui dalam bulan tertentu
+ * @param {string} yearMonth - format "YYYY-MM"
+ * @returns {Object} mapping { userId: { tanggal: { typeLabel, type } } }
+ */
+function getApprovedLeavesAndIzinForMonth(yearMonth) {
+  const leaves = getAllRows('Leaves');
+  const izins = getAllRows('Izin');
+  const result = {};
+  
+  // Fungsi untuk mengecek apakah tanggal termasuk dalam bulan yearMonth
+  const isInMonth = (dateStr) => {
+    if (!dateStr) return false;
+    const normalized = dateStr.substring(0, 7);
+    return normalized === yearMonth;
+  };
+  
+  // Proses cuti
+  leaves.forEach(leave => {
+    if (leave.status !== 'approved') return;
+    const start = _parseDateToYMD(leave.startDate);
+    const end = _parseDateToYMD(leave.endDate);
+    if (!start || !end) return;
+    let current = new Date(start);
+    const endDate = new Date(end);
+    while (current <= endDate) {
+      const dateStr = Utilities.formatDate(current, 'Asia/Jakarta', 'yyyy-MM-dd');
+      if (isInMonth(dateStr)) {
+        const userId = String(leave.userId);
+        if (!result[userId]) result[userId] = {};
+        result[userId][dateStr] = {
+          type: 'cuti',
+          typeLabel: leave.typeLabel || 'Cuti'
+        };
+      }
+      current.setDate(current.getDate() + 1);
+    }
+  });
+  
+  // Proses izin
+  izins.forEach(izin => {
+    if (izin.status !== 'approved') return;
+    const dateStr = _parseDateToYMD(izin.date);
+    if (dateStr && isInMonth(dateStr)) {
+      const userId = String(izin.userId);
+      if (!result[userId]) result[userId] = {};
+      result[userId][dateStr] = {
+        type: 'izin',
+        typeLabel: izin.typeLabel || 'Izin'
+      };
+    }
+  });
+  
+  return result;
 }
