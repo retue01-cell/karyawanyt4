@@ -119,12 +119,19 @@ function getAttendance(userId) {
   return { success: true, data: rows };
 }
 
-function getTodayAttendance(userId) {
+function getTodayAttendance(userId, dateStr) {
   if (!userId) {
     return { success: false, error: 'userId is required' };
   }
   
-  const today = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+  // Tentukan tanggal: prioritaskan dari parameter, fallback ke waktu server Asia/Jakarta
+  let today;
+  if (dateStr) {
+    today = _parseDateToYMD(dateStr);
+  } else {
+    today = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+  }
+  
   const allRows = getAllRows('Attendance');
   
   const todayRecord = allRows.find(row => 

@@ -55,7 +55,7 @@ function handleRequest(e) {
         result = getAttendance(data.userId);
         break;
       case 'getTodayAttendance':
-        result = getTodayAttendance(data.userId);
+        result = getTodayAttendance(data.userId, data.date);
         break;
       case 'saveAttendance':
         result = saveAttendanceData(data);
