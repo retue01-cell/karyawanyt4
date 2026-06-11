@@ -34,6 +34,8 @@ function approveIzinData(id) {
   
   const updated = updateRow('Izin', id, { status: 'approved' });
   if (updated) {
+    // SINKRONISASI: Buat entry di tabel Attendance dengan status = typeLabel izin
+    _syncIzinToAttendance(updated);
     return { success: true, data: updated };
   }
   return { success: false, error: 'Izin not found' };
@@ -46,6 +48,8 @@ function rejectIzinData(id) {
   
   const updated = updateRow('Izin', id, { status: 'rejected' });
   if (updated) {
+    // SINKRONISASI: Hapus entry di tabel Attendance jika ada
+    _removeSyncIzinFromAttendance(updated);
     return { success: true, data: updated };
   }
   return { success: false, error: 'Izin not found' };
@@ -68,4 +72,129 @@ function deleteIzinData(id) {
     return { success: true, data: { id: id } };
   }
   return { success: false, error: 'Izin request not found' };
+}
+
+
+// ========== SINKRONISASI KE ATTENDANCE ==========
+/**
+ * Sinkronisasi izin yang disetujui ke tabel Attendance
+ * Membuat entry dengan status = typeLabel izin pada tanggal izin
+ */
+function _syncIzinToAttendance(izinData) {
+  if (!izinData || !izinData.userId || !izinData.date) {
+    return;
+  }
+  
+  const dateStr = _parseDateToYMD(izinData.date);
+  const typeLabel = izinData.typeLabel || izinData.type || 'Izin';
+  
+  // Cek apakah sudah ada entry attendance untuk user+date ini
+  const allAttendance = getAllRows('Attendance');
+  const existing = allAttendance.find(a => 
+    String(a.userId) === String(izinData.userId) && 
+    _parseDateToYMD(a.date) === dateStr
+  );
+  
+  if (existing && existing.id) {
+    // Update existing entry dengan status izin
+    updateRow('Attendance', existing.id, {
+      status: typeLabel,
+      shift: typeLabel,
+      clockIn: '',
+      clockOut: '',
+      breakStart: '',
+      breakEnd: '',
+      overtimeStart: ''
+    });
+  } else {
+    // Buat entry baru di Attendance
+    const newId = getNextId('Attendance');
+    const attendanceEntry = {
+      id: newId,
+      userId: izinData.userId,
+      date: dateStr,
+      shift: typeLabel,
+      clockIn: '',
+      clockOut: '',
+      breakStart: '',
+      breakEnd: '',
+      overtimeStart: '',
+      status: typeLabel,
+      verificationPhoto: '',
+      verificationLocation: '',
+      verificationTimestamp: ''
+    };
+    addRow('Attendance', attendanceEntry);
+  }
+}
+
+/**
+ * Helper untuk parse tanggal ke format YYYY-MM-DD
+ * Digunakan untuk sinkronisasi
+ */
+function _parseDateToYMD(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, 'Asia/Jakarta', 'yyyy-MM-dd');
+  }
+  
+  const valStr = String(val).trim();
+  
+  // Deteksi Format ISO (yyyy-MM-dd atau yyyy/MM/dd)
+  const ymdRegex = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/;
+  let match = valStr.match(ymdRegex);
+  if (match) {
+    const y = match[1];
+    const m = match[2].padStart(2, '0');
+    const d = match[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  
+  // Deteksi Format dd-MM-yyyy atau dd/MM/yyyy
+  const dmyRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/;
+  match = valStr.match(dmyRegex);
+  if (match) {
+    const d = match[1].padStart(2, '0');
+    const m = match[2].padStart(2, '0');
+    const y = match[3];
+    return `${y}-${m}-${d}`;
+  }
+  
+  // Fallback: gunakan native JS Date parser
+  try {
+    const parsedDate = new Date(valStr);
+    if (!isNaN(parsedDate.getTime())) {
+      return Utilities.formatDate(parsedDate, 'Asia/Jakarta', 'yyyy-MM-dd');
+    }
+  } catch (e) {
+    // Abaikan jika gagal parse
+  }
+
+  if (valStr.length >= 10) {
+    return valStr.substring(0, 10);
+  }
+  return valStr;
+}
+
+/**
+ * Hapus entry di tabel Attendance jika izin ditolak
+ */
+function _removeSyncIzinFromAttendance(izinData) {
+  if (!izinData || !izinData.userId || !izinData.date) {
+    return;
+  }
+  
+  const dateStr = _parseDateToYMD(izinData.date);
+  const allAttendance = getAllRows('Attendance');
+  
+  // Cari entry yang sesuai dengan izin ini
+  const toDelete = allAttendance.find(a => 
+    String(a.userId) === String(izinData.userId) && 
+    _parseDateToYMD(a.date) === dateStr &&
+    a.status === (izinData.typeLabel || izinData.type || 'Izin')
+  );
+  
+  if (toDelete && toDelete.id) {
+    deleteRow('Attendance', toDelete.id);
+  }
 }
