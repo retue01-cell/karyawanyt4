@@ -58,6 +58,14 @@ const shiftSchedule = {
             }
             storage.set('shift_schedule', this.scheduleData);
             
+            // Ambil data cuti/izin yang disetujui untuk bulan ini
+            const leavesResult = await api.getApprovedLeavesForMonth(yearMonth);
+            if (leavesResult.success && leavesResult.data) {
+                this.approvedLeaves = leavesResult.data;
+            } else {
+                this.approvedLeaves = {};
+            }
+            
             console.log('Shift Schedule: Data loaded successfully for', yearMonth, this.scheduleData[yearMonth]);
         } catch (error) {
             console.error('Error loading schedule:', error);
@@ -68,6 +76,7 @@ const shiftSchedule = {
             if (!this.scheduleData[yearMonth]) {
                 this.scheduleData[yearMonth] = {};
             }
+            this.approvedLeaves = {};
         }
         
         const periodInput = document.getElementById('schedule-period');

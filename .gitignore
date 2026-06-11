@@ -1,52 +1,26 @@
 ```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
+# Google Apps Script related
+**/*.gs~
+
+# JavaScript build artifacts and dependencies
+node_modules/
+*.min.js
+*.bundle.js
 dist/
 build/
-target/
 
-# Dependencies
-.venv/
-venv/
-node_modules/
-.julia/
-zig-cache/
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
+# Editor and IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
-# System files
-.DS_Store
-Thumbs.db
+# Logs
+*.log
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Gradle
-.gradle/
-
-# MyPy
-.mypy_cache/
-
-# Pytest
-.pytest_cache/
+# Environment variables
+.env
+.env.local
+*.env.*
 ```

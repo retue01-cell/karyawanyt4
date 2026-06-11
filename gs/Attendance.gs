@@ -379,6 +379,7 @@ function saveAttendanceData(data) {
           if (outMinutes < shiftStartMinutes) outMinutes += 24 * 60;
       }
       
+      const settingsRows = getAllRows('Settings');
       const lateTolerance = parseInt((settingsRows.find(s => String(s.key) === 'late_tolerance') || {}).value || '15', 10);
       
       const isLate = (inMinutes > shiftStartMinutes + lateTolerance);
@@ -538,7 +539,11 @@ function saveAttendanceData(data) {
   if (existing && existing.id) {
     // Update existing record
     const updated = updateRow('Attendance', existing.id, data);
-    return { success: true, data: updated };
+    if (updated) {
+      return { success: true, data: updated };
+    } else {
+      return { success: false, error: 'Gagal mengupdate data absensi. Silakan coba lagi.' };
+    }
   } else {
     // Create new record
     data.id = getNextId('Attendance');
