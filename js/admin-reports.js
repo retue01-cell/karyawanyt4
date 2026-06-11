@@ -11,6 +11,7 @@ const adminReports = {
     rawJournals: [],
     jurnalData: [],
     leaveData: [],
+    currentDetailEmployee: null,
 
     filters: {
         attendance: { month: '', dept: '', status: '' },
@@ -284,32 +285,139 @@ const adminReports = {
             monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
         }
         const [year, month] = monthStr.split('-');
+        const yearNum = parseInt(year, 10);
+        const monthNum = parseInt(month, 10);
+        
+        // Tentukan batas hari terakhir yang dihitung
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1;
+        const currentDay = today.getDate();
+        
+        let lastDayToCount;
+        if (yearNum === currentYear && monthNum === currentMonth) {
+            lastDayToCount = currentDay;
+        } else {
+            lastDayToCount = new Date(yearNum, monthNum, 0).getDate();
+        }
+        
         const monthAttendance = this.rawAttendance.filter(a => a.date && a.date.startsWith(monthStr));
+        const approvedLeaves = this.rawLeaves.filter(l => l.status === 'approved');
+        const approvedIzin = this.rawIzin.filter(i => i.status === 'approved');
+        
         return this.rawEmployees.map(emp => {
-            const empAtt = monthAttendance.filter(a => String(a.userId) === String(emp.id));
-            let present = 0, late = 0;
-            empAtt.forEach(a => {
-                if (a.clockIn) {
-                    present++;
-                    // Gunakan status yang sesuai dengan backend: 'Terlambat' atau 'late'
-                    if (a.status && (a.status.toLowerCase() === 'terlambat' || a.status.toLowerCase() === 'late')) late++;
+            const empId = String(emp.id);
+            
+            // Ambil joinDate karyawan
+            let joinYear = null, joinMonth = null, joinDay = null;
+            if (emp.joinDate) {
+                let joinDateObj;
+                if (typeof emp.joinDate === 'string') {
+                    joinDateObj = new Date(emp.joinDate);
+                    if (!isNaN(joinDateObj.getTime())) {
+                        joinYear = joinDateObj.getFullYear();
+                        joinMonth = joinDateObj.getMonth() + 1;
+                        joinDay = joinDateObj.getDate();
+                    }
+                } else if (emp.joinDate instanceof Date) {
+                    joinYear = emp.joinDate.getFullYear();
+                    joinMonth = emp.joinDate.getMonth() + 1;
+                    joinDay = emp.joinDate.getDate();
                 }
-            });
-            const empLeaves = this.rawLeaves.filter(l => String(l.userId) === String(emp.id) && l.status === 'approved');
-            const empIzin = this.rawIzin.filter(i => String(i.userId) === String(emp.id) && i.status === 'approved');
-            let leaveDays = 0;
-            empLeaves.forEach(l => {
-                const start = new Date(l.startDate);
-                const end = new Date(l.endDate);
-                const monthStart = new Date(year, parseInt(month) - 1, 1);
-                const monthEnd = new Date(year, parseInt(month), 0);
-                if (start <= monthEnd && end >= monthStart) leaveDays += parseInt(l.duration) || 1;
-            });
-            empIzin.forEach(i => {
-                const izinDate = new Date(i.date);
-                if (izinDate.getFullYear() == year && izinDate.getMonth() == parseInt(month) - 1) leaveDays += parseInt(i.duration) || 1;
-            });
-            return { name: emp.name, department: emp.department, present, late, absent: leaveDays, total: present + leaveDays };
+            }
+            
+            // Jika tidak ada joinDate, anggap bergabung sejak awal bulan
+            let startDay = 1;
+            
+            // Kasus: karyawan belum bergabung di bulan ini (joinDate setelah bulan yang dipilih)
+            if (joinYear !== null && joinMonth !== null) {
+                if (joinYear > yearNum || (joinYear === yearNum && joinMonth > monthNum)) {
+                    // Belum bergabung, tidak ada hari yang dihitung
+                    return {
+                        name: emp.name,
+                        department: emp.department,
+                        present: 0,
+                        late: 0,
+                        cuti: 0,
+                        izin: 0,
+                        absent: 0,
+                        total: 0
+                    };
+                }
+                // Jika joinDate di bulan yang sama, startDay = tanggal bergabung
+                if (joinYear === yearNum && joinMonth === monthNum) {
+                    startDay = joinDay;
+                }
+            }
+            
+            // Jika startDay melebihi lastDayToCount (misal joinDate setelah hari ini), tidak ada hari yang dihitung
+            if (startDay > lastDayToCount) {
+                return {
+                    name: emp.name,
+                    department: emp.department,
+                    present: 0,
+                    late: 0,
+                    cuti: 0,
+                    izin: 0,
+                    absent: 0,
+                    total: 0
+                };
+            }
+            
+            let present = 0, late = 0, cutiCount = 0, izinCount = 0;
+            
+            // Loop dari startDay sampai lastDayToCount
+            for (let d = startDay; d <= lastDayToCount; d++) {
+                const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const attendance = monthAttendance.find(a => String(a.userId) === empId && a.date === dateStr);
+                
+                if (attendance && attendance.clockIn) {
+                    present++;
+                    if (attendance.status && (attendance.status.toLowerCase() === 'terlambat' || attendance.status.toLowerCase() === 'late')) {
+                        late++;
+                    }
+                    continue;
+                }
+                
+                // Cek cuti
+                let isLeave = false;
+                for (const leave of approvedLeaves) {
+                    if (String(leave.userId) === empId) {
+                        const leaveStart = new Date(leave.startDate);
+                        const leaveEnd = new Date(leave.endDate);
+                        const currentDate = new Date(dateStr);
+                        if (currentDate >= leaveStart && currentDate <= leaveEnd) {
+                            cutiCount++;
+                            isLeave = true;
+                            break;
+                        }
+                    }
+                }
+                if (isLeave) continue;
+                
+                // Cek izin
+                for (const izin of approvedIzin) {
+                    if (String(izin.userId) === empId && izin.date === dateStr) {
+                        izinCount++;
+                        isLeave = true;
+                        break;
+                    }
+                }
+            }
+            
+            const totalDays = lastDayToCount - startDay + 1;
+            const alpha = totalDays - (present + cutiCount + izinCount);
+            
+            return {
+                name: emp.name,
+                department: emp.department,
+                present: present,
+                late: late,
+                cuti: cutiCount,
+                izin: izinCount,
+                absent: alpha,
+                total: totalDays
+            };
         });
     },
 
@@ -433,20 +541,24 @@ const adminReports = {
         if (!tbody) return;
         const data = this.getFilteredAttendance();
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Tidak ada data</div></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px;">Tidak ada data</td></tr>';
             return;
         }
         tbody.innerHTML = data.map(row => `
             <tr>
                 <td><div class="employee-info"><div class="employee-details"><span class="employee-name">${this.escapeHtml(row.name)}</span></div></div></td>
-                <td>${this.escapeHtml(row.department)}</div>
-                <td class="text-center" style="color:var(--color-success); font-weight:600;">${row.present}</div>
-                <td class="text-center" style="color:var(--color-warning); font-weight:600;">${row.late}</div>
-                <td class="text-center" style="color:var(--color-danger); font-weight:600;">${row.absent}</div>
-                <td class="text-center">${row.total}</div>
-                <td><button class="btn-action view" onclick="adminReports.viewAttendanceDetail('${this.escapeHtml(row.name)}')"><i class="fas fa-eye"></i></button></div>
+                <td>${this.escapeHtml(row.department)}</td>
+                <td class="text-center" style="color:var(--color-success); font-weight:600;">${row.present}</td>
+                <td class="text-center" style="color:var(--color-warning); font-weight:600;">${row.late}</td>
+                <td class="text-center" style="color:var(--color-info); font-weight:600;">${row.cuti}</td>
+                <td class="text-center" style="color:var(--color-info); font-weight:600;">${row.izin}</td>
+                <td class="text-center" style="color:var(--color-danger); font-weight:600;">${row.absent}</td>
+                <td class="text-center">${row.total}</td>
+                <td class="text-center"><button class="btn-action view" onclick="adminReports.viewAttendanceDetail('${this.escapeHtml(row.name)}')"><i class="fas fa-eye"></i></button></td>
             </tr>
         `).join('');
+        
+        // Update mobile cards
         const mobile = document.getElementById('attendance-mobile-cards');
         if (mobile) {
             mobile.innerHTML = data.map(row => `
@@ -454,7 +566,10 @@ const adminReports = {
                     <div class="mobile-card-header"><span class="mobile-card-title">${this.escapeHtml(row.name)}</span><span>${this.escapeHtml(row.department)}</span></div>
                     <div class="mobile-card-row"><span class="mobile-card-label">Hadir</span><span>${row.present}</span></div>
                     <div class="mobile-card-row"><span class="mobile-card-label">Telat</span><span>${row.late}</span></div>
-                    <div class="mobile-card-row"><span class="mobile-card-label">Absen</span><span>${row.absent}</span></div>
+                    <div class="mobile-card-row"><span class="mobile-card-label">Cuti</span><span>${row.cuti}</span></div>
+                    <div class="mobile-card-row"><span class="mobile-card-label">Izin</span><span>${row.izin}</span></div>
+                    <div class="mobile-card-row"><span class="mobile-card-label">Alpha</span><span>${row.absent}</span></div>
+                    <div class="mobile-card-row"><span class="mobile-card-label">Total</span><span>${row.total}</span></div>
                     <button class="btn-primary btn-sm" onclick="adminReports.viewAttendanceDetail('${this.escapeHtml(row.name)}')">Lihat Detail</button>
                 </div>
             `).join('');
@@ -569,6 +684,7 @@ const adminReports = {
     },
 
     viewAttendanceDetail(name) {
+        this.currentDetailEmployee = name;
         const emp = this.rawEmployees.find(e => e.name === name);
         if (!emp) { toast.error('Karyawan tidak ditemukan'); return; }
         
@@ -578,63 +694,119 @@ const adminReports = {
             selectedMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
         }
         const [year, month] = selectedMonth.split('-');
-        const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+        const yearNum = parseInt(year, 10);
+        const monthNum = parseInt(month, 10);
+        
+        // Kumpulkan cuti & izin yang disetujui untuk karyawan ini pada bulan tersebut
+        const approvedLeaves = this.rawLeaves.filter(l => l.status === 'approved' && String(l.userId) === String(emp.id));
+        const approvedIzin = this.rawIzin.filter(i => i.status === 'approved' && String(i.userId) === String(emp.id));
+        
+        const leaveStatusMap = {};
+        
+        // Helper untuk normalisasi tanggal ke YYYY-MM-DD
+        const normalizeDate = (input) => {
+            if (!input) return '';
+            if (input instanceof Date) {
+                return input.toISOString().split('T')[0];
+            }
+            if (typeof input === 'string') {
+                if (input.match(/^\d{4}-\d{2}-\d{2}$/)) return input;
+                return input.split('T')[0];
+            }
+            return '';
+        };
+
+        approvedLeaves.forEach(leave => {
+            const startStr = normalizeDate(leave.startDate);
+            const endStr = normalizeDate(leave.endDate);
+            if (!startStr || !endStr) return;
+            
+            const start = new Date(startStr);
+            const end = new Date(endStr);
+            let current = new Date(start);
+            
+            while (current <= end) {
+                const dateStr = current.toISOString().split('T')[0];
+                // Bandingkan tahun-bulan (7 karakter pertama)
+                if (dateStr.substring(0, 7) === selectedMonth) {
+                    leaveStatusMap[dateStr] = { 
+                        type: 'cuti', 
+                        label: leave.typeLabel || 'Cuti' 
+                    };
+                }
+                current.setDate(current.getDate() + 1);
+            }
+        });
+
+        approvedIzin.forEach(izin => {
+            let dateStr = normalizeDate(izin.date);
+            if (dateStr && dateStr.substring(0, 7) === selectedMonth) {
+                leaveStatusMap[dateStr] = { 
+                    type: 'izin', 
+                    label: izin.typeLabel || 'Izin' 
+                };
+            }
+        });
+        
+        const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
         const attendanceRecords = this.rawAttendance.filter(a => String(a.userId) === String(emp.id) && a.date && a.date.startsWith(selectedMonth));
         const recordsMap = {};
         attendanceRecords.forEach(rec => { recordsMap[rec.date] = rec; });
         
         let tableRows = '';
+        const todayStr = new Date().toISOString().split('T')[0];
         for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const rec = recordsMap[dateStr];
-            let statusHtml = '<span class="badge-status warning">Tidak Hadir</span>';
+            let statusHtml = '';
             let photoHtml = '-';
-            
-            if (rec && rec.clockIn) {
-                // Gunakan mapping status sesuai backend
+
+            // Jika tanggal di masa depan, tampilkan "-"
+            if (dateStr > todayStr) {
+                statusHtml = '<span class="badge-status secondary">-</span>';
+                photoHtml = '-';
+            } else if (leaveStatusMap[dateStr]) {
+                statusHtml = `<span class="badge-status info">${leaveStatusMap[dateStr].label}</span>`;
+            } else if (rec && rec.clockIn) {
                 const statusClass = this.getStatusClass(rec.status);
                 const statusLabel = rec.status || 'Hadir';
                 statusHtml = `<span class="badge-status ${statusClass}">${statusLabel}</span>`;
-
-                // Cek apakah ada foto verifikasi
-                if (rec.verificationPhoto && rec.verificationPhoto.startsWith('data:image')) {
-                    photoHtml = `<button class="btn-action view" onclick="adminReports.viewPhoto(\'${rec.verificationPhoto.replace(/\'/g, "\\\\\\\'")}\')" title="Lihat Bukti Foto"><i class="fas fa-camera"></i></button>`;
-                } else if (rec.verificationPhoto) {
-                    // Mungkin berupa URL atau data yang sudah tercompress, coba tetap ditampilkan
-                    photoHtml = `<button class="btn-action view" onclick="adminReports.viewPhoto(\'${rec.verificationPhoto.replace(/\'/g, "\\\\\\\'")}\')" title="Lihat Bukti Foto"><i class="fas fa-image"></i></button>`;
+                if (rec.verificationPhoto) {
+                    photoHtml = `<button class="btn-action view" onclick="adminReports.viewPhoto('${rec.verificationPhoto.replace(/\\'/g, "\\\\'")}')\" title=\"Lihat Bukti Foto\"><i class="fas fa-camera"></i></button>`;
                 }
-            } else if (rec && (rec.status === 'Libur' || rec.status === 'libur')) {
-                statusHtml = '<span class="badge-status secondary">Libur</span>';
-            } else if (rec && rec.isBlocked && rec.status) {
-                // Status untuk cuti/izin yang memblokir absensi
-                const statusClass = this.getStatusClass(rec.status);
-                statusHtml = `<span class="badge-status ${statusClass}">${rec.status}</span>`;
+            } else {
+                // Tidak ada clock in dan tidak ada cuti/izin -> Alpha
+                statusHtml = '<span class="badge-status danger">Alpha</span>';
             }
-            
+
+            const clockIn = rec?.clockIn || '-';
+            const clockOut = rec?.clockOut || '-';
+
             tableRows += `
                 <tr>
-                    <td class="text-center">${d}</td>
-                    <td class="text-center">${dateStr}</td>
-                    <td class="text-center">${rec ? rec.clockIn || '-' : '-'}</td>
-                    <td class="text-center">${rec ? rec.clockOut || '-' : '-'}</td>
-                    <td class="text-center">${statusHtml}</td>
-                    <td class="text-center">${photoHtml}</td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">${d}</td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">${dateStr}</td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">${clockIn}</td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">${clockOut}</td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">${statusHtml}</td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">${photoHtml}</td>
                 </tr>
             `;
         }
-        
-        const formattedMonth = `${month}-${year}`;
+
+        const formattedMonth = `${monthNum}-${yearNum}`;
         const modalContent = `
-            <div style="max-height:60vh;overflow-y:auto;">
-                <h4>Riwayat Absensi ${emp.name} - Bulan ${formattedMonth}</h4>
-                <table class="history-table" style="width:100%;font-size:12px;border-collapse:collapse;">
+            <div style="max-height:60vh; overflow-y:auto;">
+                <h4 style="margin-bottom:16px;">Riwayat Absensi ${emp.name} - Bulan ${formattedMonth}</h4>
+                <table style="width:100%; border-collapse: collapse; font-size:13px;">
                     <thead>
-                        <tr>
-                            <th>Tanggal</th>
-                            <th>Clock In</th>
-                            <th>Clock Out</th>
-                            <th>Status</th>
-                            <th>Bukti Foto</th>
+                        <tr style="background: #f1f5f9;">
+                            <th style="padding: 10px 8px; border: 1px solid #e2e8f0; text-align: center;">No</th>
+                            <th style="padding: 10px 8px; border: 1px solid #e2e8f0; text-align: center;">Tanggal</th>
+                            <th style="padding: 10px 8px; border: 1px solid #e2e8f0; text-align: center;">Clock In</th>
+                            <th style="padding: 10px 8px; border: 1px solid #e2e8f0; text-align: center;">Clock Out</th>
+                            <th style="padding: 10px 8px; border: 1px solid #e2e8f0; text-align: center;">Status</th>
+                            <th style="padding: 10px 8px; border: 1px solid #e2e8f0; text-align: center;">Bukti Foto</th>
                         </tr>
                     </thead>
                     <tbody>${tableRows}</tbody>
@@ -688,11 +860,86 @@ const adminReports = {
     },
 
     viewPhoto(photoUrl) {
-        if (window.modal && typeof window.modal.show === 'function') {
-            window.modal.show('Foto', `<img src="${photoUrl}" style="max-width:100%; max-height:70vh;">`, [{ label: 'Tutup', class: 'btn-secondary', onClick: () => window.modal.close() }]);
-        } else {
-            window.open(photoUrl, '_blank');
-        }
+        // Hapus modal foto lama jika sudah ada (mencegah double modal)
+        const existingModal = document.getElementById('photo-viewer-modal');
+        if (existingModal) existingModal.remove();
+        
+        // Buat elemen overlay modal
+        const modalOverlay = document.createElement('div');
+        modalOverlay.id = 'photo-viewer-modal';
+        modalOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        `;
+        
+        // Container untuk foto
+        const modalContainer = document.createElement('div');
+        modalContainer.style.cssText = `
+            max-width: 90vw;
+            max-height: 90vh;
+            background: transparent;
+            cursor: default;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        `;
+        
+        // Tombol close (X) di pojok kanan atas
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText = `
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            font-size: 28px;
+            font-weight: bold;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        `;
+        closeBtn.onmouseover = () => closeBtn.style.background = 'rgba(0,0,0,0.9)';
+        closeBtn.onmouseout = () => closeBtn.style.background = 'rgba(0,0,0,0.6)';
+        
+        // Gambar
+        const img = document.createElement('img');
+        img.src = photoUrl;
+        img.style.cssText = `
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            background: white;
+            padding: 4px;
+        `;
+        
+        modalContainer.appendChild(closeBtn);
+        modalContainer.appendChild(img);
+        modalOverlay.appendChild(modalContainer);
+        
+        // Tutup modal jika klik overlay (area luar gambar) atau tombol close
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay || e.target === closeBtn) {
+                modalOverlay.remove();
+            }
+        });
+        
+        document.body.appendChild(modalOverlay);
     },
 
     _showModal(title, content) {
@@ -720,6 +967,16 @@ const adminReports = {
                 toast.success('Pengajuan disetujui!');
                 await this.loadData();
                 this.renderLeaveReports();
+                
+                // Tutup modal detail jika sedang terbuka
+                if (this.currentDetailEmployee) {
+                    const modal = document.getElementById('dynamic-modal');
+                    if (modal && modal.style.display === 'flex') {
+                        window.modal.close();
+                        toast.info('Data telah diperbarui. Silakan buka detail absensi kembali.');
+                        this.currentDetailEmployee = null;
+                    }
+                }
             } else toast.error(result.error || 'Gagal menyetujui');
         } catch (error) { toast.error('Terjadi kesalahan'); }
     },
@@ -734,6 +991,16 @@ const adminReports = {
                 toast.info('Pengajuan ditolak');
                 await this.loadData();
                 this.renderLeaveReports();
+                
+                // Tutup modal detail jika sedang terbuka
+                if (this.currentDetailEmployee) {
+                    const modal = document.getElementById('dynamic-modal');
+                    if (modal && modal.style.display === 'flex') {
+                        window.modal.close();
+                        toast.info('Data telah diperbarui. Silakan buka detail absensi kembali.');
+                        this.currentDetailEmployee = null;
+                    }
+                }
             } else toast.error(result.error || 'Gagal menolak');
         } catch (error) { toast.error('Terjadi kesalahan'); }
     },
