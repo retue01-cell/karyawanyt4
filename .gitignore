@@ -1,5 +1,1 @@
-(js/admin-reports.js is a source file, and there are no build artifacts, dependencies, or temp files in the changes)
-
-```javascript
-
-```
+(js/admin-reports.js is just a source file, no build artifacts, dependencies, or temp files in the changes, so no need for any gitignore rules)
