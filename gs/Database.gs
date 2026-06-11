@@ -100,6 +100,7 @@ function seedDefaultData() {
     settingsSheet.appendRow(['face_recognition', 'true']);
     settingsSheet.appendRow(['location_tracking', 'true']);
     settingsSheet.appendRow(['default_leave_balance', '12']);
+    settingsSheet.appendRow(['outside_tolerance', '120']); // Batas toleransi clock out (menit) sebelum dianggap Outside
   }
 
   // Employees

@@ -408,6 +408,7 @@ function saveAttendanceData(data) {
   // Cek outside untuk clock out
   if (data.clockOut) {
       const settingsRows = getAllRows('Settings');
+      const outsideTolerance = parseInt((settingsRows.find(s => String(s.key) === 'outside_tolerance') || {}).value || '120', 10);
       const dateStr = _parseDateToYMD(data.date);
       const shiftDef = _getShiftForDate(data.shift, dateStr);
       let shiftStartTimeStr = "08:00";
@@ -469,19 +470,16 @@ function saveAttendanceData(data) {
           }
       }
       
-      // Cek outside untuk clock out dengan penanganan shift malam
+      // Cek outside untuk clock out dengan penanganan shift malam dan toleransi
       let isOutside = false;
       if (isOvernight) {
-          // Shift malam: valid jika clock out antara startTime s/d midnight ATAU midnight s/d endTime
-          // Contoh: shift 22:00-06:00, valid jika 22:00-23:59 ATAU 00:00-06:00
-          if (adjustedOutMinutes >= shiftStartMinutes && adjustedOutMinutes <= shiftEndMinutes) {
-              isOutside = false;
-          } else {
+          // Shift malam: outside jika clock out sebelum startTime atau setelah endTime + tolerance
+          if (adjustedOutMinutes < shiftStartMinutes || adjustedOutMinutes > shiftEndMinutes + outsideTolerance) {
               isOutside = true;
           }
       } else {
-          // Shift normal: outside jika clock out sebelum startTime atau setelah endTime
-          if (outMinutes < shiftStartMinutes || outMinutes > shiftEndMinutes) {
+          // Shift normal: outside jika clock out sebelum startTime atau setelah endTime + tolerance
+          if (outMinutes < shiftStartMinutes || outMinutes > shiftEndMinutes + outsideTolerance) {
               isOutside = true;
           }
       }
