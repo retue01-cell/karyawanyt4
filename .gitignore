@@ -1,1 +1,1 @@
-Nothing should be ignored since the changes only include source files (.gs files) without any build artifacts, dependencies, or temporary files.
+(js/admin-reports.js is just a source file, no build artifacts, dependencies, or temp files in the changes)
