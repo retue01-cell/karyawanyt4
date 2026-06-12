@@ -106,36 +106,29 @@ function _syncLeaveToAttendance(leaveData) {
       _parseDateToYMD(a.date) === dateStr
     );
     
+    // Data yang akan ditulis (hapus semua jam absensi, set status cuti)
+    const attendanceData = {
+      status: typeLabel,
+      shift: typeLabel,
+      clockIn: '',
+      clockOut: '',
+      breakStart: '',
+      breakEnd: '',
+      overtimeStart: '',
+      verificationPhoto: '',
+      verificationLocation: '',
+      verificationTimestamp: ''
+    };
+    
     if (existing && existing.id) {
-      // Update existing entry
-      updateRow('Attendance', existing.id, {
-        status: typeLabel,
-        shift: typeLabel,
-        clockIn: '',
-        clockOut: '',
-        breakStart: '',
-        breakEnd: '',
-        overtimeStart: ''
-      });
+      // Update existing entry (timpa apapun yang ada)
+      updateRow('Attendance', existing.id, attendanceData);
     } else {
       // Buat entry baru
-      const newId = getNextId('Attendance');
-      const attendanceEntry = {
-        id: newId,
-        userId: leaveData.userId,
-        date: dateStr,
-        shift: typeLabel,
-        clockIn: '',
-        clockOut: '',
-        breakStart: '',
-        breakEnd: '',
-        overtimeStart: '',
-        status: typeLabel,
-        verificationPhoto: '',
-        verificationLocation: '',
-        verificationTimestamp: ''
-      };
-      addRow('Attendance', attendanceEntry);
+      attendanceData.id = getNextId('Attendance');
+      attendanceData.userId = leaveData.userId;
+      attendanceData.date = dateStr;
+      addRow('Attendance', attendanceData);
     }
     
     // Lanjut ke hari berikutnya
@@ -229,11 +222,11 @@ function _removeSyncLeaveFromAttendance(leaveData) {
   while (currentDate <= endDate) {
     const dateStr = Utilities.formatDate(currentDate, 'Asia/Jakarta', 'yyyy-MM-dd');
     
-    // Cari entry yang sesuai dengan cuti ini
+    // Cari entry yang sesuai dengan cuti ini (status = typeLabel cuti)
     const toDelete = allAttendance.find(a => 
       String(a.userId) === String(leaveData.userId) && 
       _parseDateToYMD(a.date) === dateStr &&
-      a.status === typeLabel
+      (a.status === typeLabel || a.status === leaveData.type)
     );
     
     if (toDelete && toDelete.id) {

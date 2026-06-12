@@ -95,36 +95,29 @@ function _syncIzinToAttendance(izinData) {
     _parseDateToYMD(a.date) === dateStr
   );
   
+  // Data yang akan ditulis (hapus semua jam absensi, set status izin)
+  const attendanceData = {
+    status: typeLabel,
+    shift: typeLabel,
+    clockIn: '',
+    clockOut: '',
+    breakStart: '',
+    breakEnd: '',
+    overtimeStart: '',
+    verificationPhoto: '',
+    verificationLocation: '',
+    verificationTimestamp: ''
+  };
+  
   if (existing && existing.id) {
-    // Update existing entry dengan status izin
-    updateRow('Attendance', existing.id, {
-      status: typeLabel,
-      shift: typeLabel,
-      clockIn: '',
-      clockOut: '',
-      breakStart: '',
-      breakEnd: '',
-      overtimeStart: ''
-    });
+    // Update existing entry dengan status izin (timpa apapun yang ada)
+    updateRow('Attendance', existing.id, attendanceData);
   } else {
     // Buat entry baru di Attendance
-    const newId = getNextId('Attendance');
-    const attendanceEntry = {
-      id: newId,
-      userId: izinData.userId,
-      date: dateStr,
-      shift: typeLabel,
-      clockIn: '',
-      clockOut: '',
-      breakStart: '',
-      breakEnd: '',
-      overtimeStart: '',
-      status: typeLabel,
-      verificationPhoto: '',
-      verificationLocation: '',
-      verificationTimestamp: ''
-    };
-    addRow('Attendance', attendanceEntry);
+    attendanceData.id = getNextId('Attendance');
+    attendanceData.userId = izinData.userId;
+    attendanceData.date = dateStr;
+    addRow('Attendance', attendanceData);
   }
 }
 
@@ -187,11 +180,11 @@ function _removeSyncIzinFromAttendance(izinData) {
   const dateStr = _parseDateToYMD(izinData.date);
   const allAttendance = getAllRows('Attendance');
   
-  // Cari entry yang sesuai dengan izin ini
+  // Cari entry yang sesuai dengan izin ini (status = typeLabel izin)
   const toDelete = allAttendance.find(a => 
     String(a.userId) === String(izinData.userId) && 
     _parseDateToYMD(a.date) === dateStr &&
-    a.status === (izinData.typeLabel || izinData.type || 'Izin')
+    (a.status === (izinData.typeLabel || izinData.type || 'Izin'))
   );
   
   if (toDelete && toDelete.id) {
