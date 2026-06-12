@@ -32,10 +32,19 @@ function approveLeaveData(id) {
     return { success: false, error: 'id is required' };
   }
   
+  // Ambil data lengkap terlebih dahulu untuk memastikan semua field tersedia
+  const allLeaves = getAllRows('Leaves');
+  const leave = allLeaves.find(l => String(l.id) === String(id));
+  if (!leave) {
+    return { success: false, error: 'Leave not found' };
+  }
+  
   const updated = updateRow('Leaves', id, { status: 'approved' });
   if (updated) {
+    // Gabungkan data lama dengan data baru untuk memastikan field lengkap
+    const fullData = { ...leave, ...updated };
     // SINKRONISASI: Buat entry di tabel Attendance untuk setiap hari cuti
-    _syncLeaveToAttendance(updated);
+    _syncLeaveToAttendance(fullData);
     return { success: true, data: updated };
   }
   return { success: false, error: 'Leave not found' };
@@ -46,10 +55,19 @@ function rejectLeaveData(id) {
     return { success: false, error: 'id is required' };
   }
   
+  // Ambil data lengkap terlebih dahulu untuk memastikan semua field tersedia
+  const allLeaves = getAllRows('Leaves');
+  const leave = allLeaves.find(l => String(l.id) === String(id));
+  if (!leave) {
+    return { success: false, error: 'Leave not found' };
+  }
+  
   const updated = updateRow('Leaves', id, { status: 'rejected' });
   if (updated) {
+    // Gabungkan data lama dengan data baru untuk memastikan field lengkap
+    const fullData = { ...leave, ...updated };
     // SINKRONISASI: Hapus entry di tabel Attendance jika ada
-    _removeSyncLeaveFromAttendance(updated);
+    _removeSyncLeaveFromAttendance(fullData);
     return { success: true, data: updated };
   }
   return { success: false, error: 'Leave not found' };
@@ -81,7 +99,8 @@ function deleteLeaveData(id) {
  * Membuat entry untuk setiap hari dalam periode cuti dengan status = typeLabel cuti
  */
 function _syncLeaveToAttendance(leaveData) {
-  if (!leaveData || !leaveData.userId || !leaveData.startDate || !leaveData.endDate) {
+  if (!leaveData || !leaveData.userId) {
+    console.error('Sync leave: missing userId', leaveData);
     return;
   }
   
@@ -89,6 +108,7 @@ function _syncLeaveToAttendance(leaveData) {
   const endDate = _parseLeaveDate(leaveData.endDate);
   
   if (!startDate || !endDate) {
+    console.error('Sync leave: invalid dates', leaveData.startDate, leaveData.endDate);
     return;
   }
   
@@ -123,12 +143,14 @@ function _syncLeaveToAttendance(leaveData) {
     if (existing && existing.id) {
       // Update existing entry (timpa apapun yang ada)
       updateRow('Attendance', existing.id, attendanceData);
+      console.log('Updated attendance for', dateStr, 'with status', typeLabel);
     } else {
       // Buat entry baru
       attendanceData.id = getNextId('Attendance');
       attendanceData.userId = leaveData.userId;
       attendanceData.date = dateStr;
       addRow('Attendance', attendanceData);
+      console.log('Created attendance for', dateStr, 'with status', typeLabel);
     }
     
     // Lanjut ke hari berikutnya

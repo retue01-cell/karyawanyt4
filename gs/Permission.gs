@@ -32,10 +32,19 @@ function approveIzinData(id) {
     return { success: false, error: 'id is required' };
   }
   
+  // Ambil data lengkap terlebih dahulu untuk memastikan semua field tersedia
+  const allIzins = getAllRows('Izin');
+  const izin = allIzins.find(i => String(i.id) === String(id));
+  if (!izin) {
+    return { success: false, error: 'Izin not found' };
+  }
+  
   const updated = updateRow('Izin', id, { status: 'approved' });
   if (updated) {
+    // Gabungkan data lama dengan data baru untuk memastikan field lengkap
+    const fullData = { ...izin, ...updated };
     // SINKRONISASI: Buat entry di tabel Attendance dengan status = typeLabel izin
-    _syncIzinToAttendance(updated);
+    _syncIzinToAttendance(fullData);
     return { success: true, data: updated };
   }
   return { success: false, error: 'Izin not found' };
@@ -46,10 +55,19 @@ function rejectIzinData(id) {
     return { success: false, error: 'id is required' };
   }
   
+  // Ambil data lengkap terlebih dahulu untuk memastikan semua field tersedia
+  const allIzins = getAllRows('Izin');
+  const izin = allIzins.find(i => String(i.id) === String(id));
+  if (!izin) {
+    return { success: false, error: 'Izin not found' };
+  }
+  
   const updated = updateRow('Izin', id, { status: 'rejected' });
   if (updated) {
+    // Gabungkan data lama dengan data baru untuk memastikan field lengkap
+    const fullData = { ...izin, ...updated };
     // SINKRONISASI: Hapus entry di tabel Attendance jika ada
-    _removeSyncIzinFromAttendance(updated);
+    _removeSyncIzinFromAttendance(fullData);
     return { success: true, data: updated };
   }
   return { success: false, error: 'Izin not found' };
@@ -81,11 +99,17 @@ function deleteIzinData(id) {
  * Membuat entry dengan status = typeLabel izin pada tanggal izin
  */
 function _syncIzinToAttendance(izinData) {
-  if (!izinData || !izinData.userId || !izinData.date) {
+  if (!izinData || !izinData.userId) {
+    console.error('Sync izin: missing userId', izinData);
     return;
   }
   
   const dateStr = _parseDateToYMD(izinData.date);
+  if (!dateStr) {
+    console.error('Sync izin: invalid date', izinData.date);
+    return;
+  }
+  
   const typeLabel = izinData.typeLabel || izinData.type || 'Izin';
   
   // Cek apakah sudah ada entry attendance untuk user+date ini
@@ -112,12 +136,14 @@ function _syncIzinToAttendance(izinData) {
   if (existing && existing.id) {
     // Update existing entry dengan status izin (timpa apapun yang ada)
     updateRow('Attendance', existing.id, attendanceData);
+    console.log('Updated attendance for', dateStr, 'with status', typeLabel);
   } else {
     // Buat entry baru di Attendance
     attendanceData.id = getNextId('Attendance');
     attendanceData.userId = izinData.userId;
     attendanceData.date = dateStr;
     addRow('Attendance', attendanceData);
+    console.log('Created attendance for', dateStr, 'with status', typeLabel);
   }
 }
 

@@ -1,1 +1,1 @@
-(gs/Leave.gs, gs/Permission.gs)
+Nothing should be ignored since the changes only include source files (.gs files) without any build artifacts, dependencies, or temporary files.
