@@ -150,7 +150,7 @@ const faceRecognition = {
 
     initLocation() {
         if (!navigator.geolocation) {
-            toast.error('Browser Anda tidak mendukung geolokasi');
+            console.warn('Geolocation not supported by browser');
             this.updateLocationStatusUI('not_supported', 'Browser tidak support GPS');
             return;
         }
@@ -162,59 +162,85 @@ const faceRecognition = {
         // Mulai update waktu realtime (setiap 1 detik)
         this.startLocationTimeUpdater();
 
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                this.position = position;
-                
-                // Validasi lokasi terhadap setting toko
-                const isValid = this.validateLocation(position);
-                
-                if (isValid) {
-                    this.locationVerified = true;
-                    this.updateLocationStatusUI('verified', 'Lokasi Valid');
-                } else {
-                    this.locationVerified = false;
-                    this.updateLocationStatusUI('invalid', 'Lokasi Tidak Valid');
-                }
+        console.log('Requesting geolocation with high accuracy...');
+        
+        const successCallback = (position) => {
+            console.log('Location obtained:', position.coords.latitude, position.coords.longitude);
+            this.position = position;
 
-                // Update info lokasi
-                if (infoEl) {
-                    infoEl.style.display = 'block';
-                    const coordsEl = document.getElementById('location-coords');
-                    const addressEl = document.getElementById('location-address');
-                    const accuracyEl = document.getElementById('location-accuracy');
-                    
-                    if (coordsEl) {
-                        coordsEl.textContent = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-                    }
-                    if (addressEl) {
-                        addressEl.textContent = isValid ? '✓ Lokasi dalam radius toko' : '✗ Di luar radius toko';
-                    }
-                    if (accuracyEl) {
-                        accuracyEl.textContent = `±${Math.round(position.coords.accuracy)} m`;
-                    }
-                }
+            // Validasi lokasi terhadap setting toko
+            const isValid = this.validateLocation(position);
 
-                // Inisialisasi peta (dengan perbaikan sebelumnya)
-                this.initMap(position);
-                this.checkCanSubmit();
-            },
-            (error) => {
-                console.error('Location error:', error);
+            if (isValid) {
+                this.locationVerified = true;
+                this.updateLocationStatusUI('verified', 'Lokasi Valid');
+            } else {
                 this.locationVerified = false;
-                this.updateLocationStatusUI('error', 'Gagal dapat lokasi');
-                
-                // Fallback untuk testing (opsional)
-                if (window.location.hostname === 'localhost') {
-                    const fallbackPos = { coords: { latitude: -6.200000, longitude: 106.816666, accuracy: 100 } };
-                    this.position = fallbackPos;
-                    const isValid = this.validateLocation(fallbackPos);
-                    this.locationVerified = isValid;
-                    this.updateLocationStatusUI(isValid ? 'verified' : 'invalid', isValid ? 'Lokasi Valid (simulasi)' : 'Lokasi Tidak Valid (simulasi)');
-                    this.initMap(fallbackPos);
+                this.updateLocationStatusUI('invalid', 'Lokasi Tidak Valid');
+            }
+
+            // Update info lokasi
+            if (infoEl) {
+                infoEl.style.display = 'block';
+                const coordsEl = document.getElementById('location-coords');
+                const addressEl = document.getElementById('location-address');
+                const accuracyEl = document.getElementById('location-accuracy');
+
+                if (coordsEl) {
+                    coordsEl.textContent = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
                 }
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                if (addressEl) {
+                    addressEl.textContent = isValid ? '✓ Lokasi dalam radius toko' : '✗ Di luar radius toko';
+                }
+                if (accuracyEl) {
+                    accuracyEl.textContent = `±${Math.round(position.coords.accuracy)} m`;
+                }
+            }
+
+            // Inisialisasi peta
+            this.initMap(position);
+            this.checkCanSubmit();
+        };
+
+        const errorCallback = (error) => {
+            console.warn('Geolocation Error (Akurasi Tinggi):', error.code, error.message);
+            
+            // JIKA TIMEOUT ATAU GPS TIDAK MERESPON, RETRY DENGAN AKURASI RENDAH
+            if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+                console.log('Mencoba mengambil lokasi kembali menggunakan akurasi rendah...');
+                navigator.geolocation.getCurrentPosition(
+                    successCallback,
+                    (secondError) => {
+                        console.error('Semua pemicu lokasi gagal:', secondError);
+                        this.locationVerified = false;
+                        this.updateLocationStatusUI('error', 'Gagal melacak lokasi Anda');
+                        
+                        // Fallback untuk testing di localhost
+                        if (window.location.hostname === 'localhost') {
+                            const fallbackPos = { coords: { latitude: -6.200000, longitude: 106.816666, accuracy: 100 } };
+                            this.position = fallbackPos;
+                            this.locationVerified = true;
+                            this.updateLocationStatusUI('verified', 'Lokasi Valid (simulasi)');
+                            this.initMap(fallbackPos);
+                        }
+                    },
+                    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+                );
+            } else {
+                this.locationVerified = false;
+                let errorMsg = 'Gagal mendapatkan lokasi. ';
+                if (error.code === 1) {
+                    errorMsg += 'Mohon izinkan akses lokasi di browser Anda.';
+                }
+                console.warn(errorMsg);
+                this.updateLocationStatusUI('error', 'Akses lokasi ditolak');
+            }
+        };
+
+        navigator.geolocation.getCurrentPosition(
+            successCallback, 
+            errorCallback, 
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
         );
     },
 
@@ -267,9 +293,24 @@ const faceRecognition = {
         this.locationUpdateInterval = setInterval(() => {
             const timeEl = document.getElementById('location-time');
             if (timeEl) {
-                timeEl.textContent = dateTime.getCurrentTime();
+                try {
+                    const now = new Date();
+                    const hour = String(now.getHours()).padStart(2, '0');
+                    const minute = String(now.getMinutes()).padStart(2, '0');
+                    timeEl.textContent = `${hour}:${minute}`;
+                } catch (e) {
+                    console.error('Error updating location time:', e);
+                }
             }
         }, 1000);
+        // Trigger sekali langsung agar tidak menunggu 1 detik
+        const timeEl = document.getElementById('location-time');
+        if (timeEl) {
+            const now = new Date();
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            timeEl.textContent = `${hour}:${minute}`;
+        }
     },
 
     bindButtons() {
@@ -459,6 +500,14 @@ const faceRecognition = {
         }
 
         // Bersihkan container
+        // === PERBAIKAN 1: Override path marker Leaflet dari CDN ===
+        delete L.Icon.Default.prototype._getIconUrl;
+        L.Icon.Default.mergeOptions({
+            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        });
+
         mapContainer.innerHTML = '';
         
         // Buat peta Leaflet (tambahkan opsi zoom control untuk debugging)
@@ -502,7 +551,7 @@ const faceRecognition = {
             if (this.map) {
                 this.map.invalidateSize();
             }
-        }, 200);
+        }, 600); // 600ms aman dari durasi animasi fadeInUp (400ms)
         
         // Tambahkan event listener untuk resize window
         window.addEventListener('resize', () => {

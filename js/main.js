@@ -159,32 +159,110 @@ const dateTime = {
 
     calculateDuration(start, end) {
         if (!start || !end) return '0j 0m';
-        
-        // Konversi titik ke titik dua (format Indonesia ke format standar)
+
+        // Ganti titik atau pemisah tidak standar ke titik dua
         const cleanStart = String(start).replace(/\./g, ':');
         const cleanEnd = String(end).replace(/\./g, ':');
+
+        const [startH, startM] = cleanStart.split(':').map(Number);
+        const [endH, endM] = cleanEnd.split(':').map(Number);
+
+        if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return '0j 0m';
+
+        let startMinutes = startH * 60 + startM;
+        let endMinutes = endH * 60 + endM;
+
+        let diffMinutes = endMinutes - startMinutes;
+        if (diffMinutes < 0) {
+            // Mengatasi shift malam yang melewati tengah malam
+            diffMinutes += 24 * 60;
+        }
+
+        const hours = Math.floor(diffMinutes / 60);
+        const mins = diffMinutes % 60;
+        return `${hours}j ${mins}m`;
+    },
+
+    normalizeTime(timeStr) {
+        if (!timeStr && timeStr !== 0) return '--:--';
+        let str = String(timeStr).trim();
         
-        // Ambil hanya HH:MM (abaikan detik jika ada)
-        const startStr = cleanStart.substring(0, 5);
-        const endStr = cleanEnd.substring(0, 5);
+        // Hapus apostrof jika ada (dari hasil penyimpanan backend)
+        if (str.startsWith("'")) str = str.substring(1);
         
-        const startTime = new Date(`2000-01-01 ${startStr}`);
-        const endTime = new Date(`2000-01-01 ${endStr}`);
-        
-        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return '0j 0m';
-        
-        let diff = endTime - startTime;
-        
-        // Handle overnight shifts (if end time is less than start time, add 24 hours)
-        if (diff < 0) {
-            diff += 24 * 60 * 60 * 1000;
+        // CASE 1: Format sudah HH:MM atau HH:MM:SS (mengandung titik dua)
+        let match = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+        if (match) {
+            let hour = match[1].padStart(2, '0');
+            let minute = match[2].padStart(2, '0');
+            return `${hour}:${minute}`;
         }
         
-        const hours = Math.floor(diff / (60 * 60 * 1000));
-        const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+        // CASE 2: Format desimal dari Google Sheets (fraksi jam)
+        // 22.5 = 22 + 0.5*60 = 22:30
+        // 22.3333 = 22 + 0.3333*60 ≈ 22:20
+        // 22.1 = 22 + 0.1*60 = 22:06
+        let num = parseFloat(str);
+        if (!isNaN(num) && str.includes('.')) {
+            let hour = Math.floor(num);
+            let minuteDecimal = num - hour;
+            let minute = Math.round(minuteDecimal * 60);
+            
+            // Handle edge case dimana pembulatan menghasilkan 60 menit
+            if (minute === 60) {
+                hour += 1;
+                minute = 0;
+            }
+            minute = Math.min(59, Math.max(0, minute));
+            
+            return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        }
         
-        return `${hours}j ${minutes}m`;
-    }
+        // CASE 3: Format titik sebagai pemisah jam.menit (contoh: "14.31" -> 14:31)
+        // Hanya untuk kasus khusus dimana format jelas HH.MM dengan menit 2 digit
+        let dotMatch = str.match(/^(\d{1,2})\.(\d{2})$/);
+        if (dotMatch) {
+            let hour = parseInt(dotMatch[1], 10);
+            let minute = parseInt(dotMatch[2], 10);
+            
+            // Jika menit >= 60, batasi menjadi 59
+            if (minute >= 60) minute = 59;
+            
+            return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        }
+        
+        // CASE 4: Angka bulat (jarang terjadi untuk waktu)
+        let intNum = parseInt(str, 10);
+        if (!isNaN(intNum)) {
+            return `${intNum.toString().padStart(2, '0')}:00`;
+        }
+        
+        // Fallback: kembalikan apa adanya
+        return str;
+    },
+
+    // Fungsi baru untuk mendapatkan waktu saat ini dalam format HH:MM
+    getCurrentTimeHM() {
+        const now = new Date();
+        const hour = now.getHours().toString().padStart(2, '0');
+        const minute = now.getMinutes().toString().padStart(2, '0');
+        return `${hour}:${minute}`;
+    },
+
+    formatTime(date) {
+        const d = new Date(date);
+        const hour = d.getHours().toString().padStart(2, '0');
+        const minute = d.getMinutes().toString().padStart(2, '0');
+        return `${hour}:${minute}`;
+    },
+
+    getCurrentTime() {
+        const d = new Date();
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
+        return `${h}:${m}:${s}`; // Menjamin format HH:MM:SS konsisten di semua browser
+    },
 };
 
 // Form Utilities
@@ -569,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             const time = timeEl.querySelector('.time');
             const date = timeEl.querySelector('.date');
-            if (time) time.textContent = dateTime.formatTime(now);
+            if (time) time.textContent = dateTime.getCurrentTimeHM();
             if (date) date.textContent = dateTime.formatDate(now);
         }, 1000);
     }

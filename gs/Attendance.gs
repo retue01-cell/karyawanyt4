@@ -79,6 +79,43 @@ function _parseDateToYMD(val) {
   return valStr;
 }
 
+// Helper: normalisasi waktu ke format HH:MM
+function _normalizeTime(val) {
+  if (!val && val !== 0) return '';
+  var str = String(val).trim();
+  
+  // 1. Sudah format HH:MM atau HH:MM:SS
+  var match = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (match) {
+    var hour = match[1].padStart(2, '0');
+    var minute = match[2].padStart(2, '0');
+    return hour + ':' + minute;
+  }
+  
+  // 2. Format desimal (contoh: "14.31" atau 14.31) - konversi fraksi jam ke menit
+  var num = parseFloat(str);
+  if (!isNaN(num) && str.indexOf('.') !== -1) {
+    var hourInt = Math.floor(num);
+    var minuteDecimal = num - hourInt;
+    var minuteInt = Math.round(minuteDecimal * 60);
+    if (minuteInt === 60) {
+      hourInt++;
+      minuteInt = 0;
+    }
+    minuteInt = Math.min(59, minuteInt);
+    return hourInt.toString().padStart(2, '0') + ':' + minuteInt.toString().padStart(2, '0');
+  }
+  
+  // 3. Format angka bulat (jam saja)
+  var intNum = parseInt(str, 10);
+  if (!isNaN(intNum)) {
+    return intNum.toString().padStart(2, '0') + ':00';
+  }
+  
+  // fallback
+  return str;
+}
+
 // Helper: ambil shift definition yang sesuai dengan tanggal tertentu
 function _getShiftForDate(shiftName, dateStr) {
   const allShifts = getAllRows('Shifts');
@@ -102,6 +139,11 @@ function _getShiftForDate(shiftName, dateStr) {
       }
     }
   }
+  // Normalisasi waktu shift
+  if (found) {
+    if (found.startTime) found.startTime = _normalizeTime(found.startTime);
+    if (found.endTime) found.endTime = _normalizeTime(found.endTime);
+  }
   return found;
 }
 
@@ -111,7 +153,15 @@ function getAttendance(userId) {
   }
   
   const rows = findRows('Attendance', 'userId', userId);
-  rows.forEach(r => r.date = _parseDateToYMD(r.date));
+  rows.forEach(r => {
+    r.date = _parseDateToYMD(r.date);
+    // Normalisasi semua field waktu
+    if (r.clockIn) r.clockIn = _normalizeTime(r.clockIn);
+    if (r.clockOut) r.clockOut = _normalizeTime(r.clockOut);
+    if (r.breakStart) r.breakStart = _normalizeTime(r.breakStart);
+    if (r.breakEnd) r.breakEnd = _normalizeTime(r.breakEnd);
+    if (r.overtimeStart) r.overtimeStart = _normalizeTime(r.overtimeStart);
+  });
   
   // Sort by date descending
   rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -165,6 +215,12 @@ function getTodayAttendance(userId, dateStr) {
   
   if (todayRecord) {
     todayRecord.date = _parseDateToYMD(todayRecord.date);
+    // Normalisasi semua field waktu
+    if (todayRecord.clockIn) todayRecord.clockIn = _normalizeTime(todayRecord.clockIn);
+    if (todayRecord.clockOut) todayRecord.clockOut = _normalizeTime(todayRecord.clockOut);
+    if (todayRecord.breakStart) todayRecord.breakStart = _normalizeTime(todayRecord.breakStart);
+    if (todayRecord.breakEnd) todayRecord.breakEnd = _normalizeTime(todayRecord.breakEnd);
+    if (todayRecord.overtimeStart) todayRecord.overtimeStart = _normalizeTime(todayRecord.overtimeStart);
     return { success: true, data: todayRecord };
   }
   
@@ -215,6 +271,13 @@ function saveAttendanceData(data) {
   if (!data.userId || !data.date) {
     return { success: false, error: 'userId and date are required' };
   }
+  
+  // NORMALISASI SEMUA WAKTU SEBELUM DIPROSES
+  if (data.clockIn) data.clockIn = _normalizeTime(data.clockIn);
+  if (data.clockOut) data.clockOut = _normalizeTime(data.clockOut);
+  if (data.breakStart) data.breakStart = _normalizeTime(data.breakStart);
+  if (data.breakEnd) data.breakEnd = _normalizeTime(data.breakEnd);
+  if (data.overtimeStart) data.overtimeStart = _normalizeTime(data.overtimeStart);
   
   // CEK APAKAH ADA IZIN/CUTI YANG DISETUJUI - tolak absensi
   const approved = getApprovedLeaveOrIzin(data.userId, data.date);
@@ -559,7 +622,15 @@ function saveAttendanceData(data) {
 
 function getAllAttendanceData() {
   const rows = getAllRows('Attendance');
-  rows.forEach(r => r.date = _parseDateToYMD(r.date));
+  rows.forEach(r => {
+    r.date = _parseDateToYMD(r.date);
+    // Normalisasi semua field waktu
+    if (r.clockIn) r.clockIn = _normalizeTime(r.clockIn);
+    if (r.clockOut) r.clockOut = _normalizeTime(r.clockOut);
+    if (r.breakStart) r.breakStart = _normalizeTime(r.breakStart);
+    if (r.breakEnd) r.breakEnd = _normalizeTime(r.breakEnd);
+    if (r.overtimeStart) r.overtimeStart = _normalizeTime(r.overtimeStart);
+  });
   rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return { success: true, data: rows };
 }
