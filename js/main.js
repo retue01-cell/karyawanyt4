@@ -196,20 +196,18 @@ const dateTime = {
         // CASE 1: Format sudah HH:MM atau HH:M (mengandung titik dua)
         if (str.includes(':')) {
             let parts = str.split(':');
-            let h = parts[0].padStart(2, '0');
-            let m = parts[1];
-            // Jika hanya 1 digit menit, asumsikan itu puluhan (3 -> 30)
-            if (m.length === 1) {
-                m = m + '0';
-            }
-            return `${h}:${m.padStart(2, '0')}`;
+            let hour = parts[0].padStart(2, '0');
+            let minute = parts[1];
+            // Pastikan menit dua digit
+            minute = minute.padStart(2, '0').substring(0, 2);
+            return `${hour}:${minute}`;
         }
         
-        // CASE 2: Format desimal dari Google Sheets (contoh: 22.5, 22.3333, 22.25)
+        // CASE 2: Format desimal dari Google Sheets (contoh: 22.5, 22.3333, 22.1)
         // Ini adalah angka float dimana bagian desimal mewakili fraksi jam
         // 22.5 = 22 + 0.5*60 = 22:30
         // 22.3333 = 22 + 0.3333*60 ≈ 22:20
-        // 22.25 = 22 + 0.25*60 = 22:15
+        // 22.1 = 22 + 0.1*60 = 22:06
         if (str.includes('.') && !str.includes(':')) {
             let num = parseFloat(str);
             if (!isNaN(num)) {
@@ -235,7 +233,22 @@ const dateTime = {
         
         // Fallback: kembalikan apa adanya
         return str;
-    }
+    },
+
+    formatTime(date) {
+        const d = new Date(date);
+        const hour = d.getHours().toString().padStart(2, '0');
+        const minute = d.getMinutes().toString().padStart(2, '0');
+        return `${hour}:${minute}`;
+    },
+
+    getCurrentTime() {
+        const now = new Date();
+        const hour = now.getHours().toString().padStart(2, '0');
+        const minute = now.getMinutes().toString().padStart(2, '0');
+        const second = now.getSeconds().toString().padStart(2, '0');
+        return `${hour}:${minute}:${second}`;
+    },
 };
 
 // Form Utilities

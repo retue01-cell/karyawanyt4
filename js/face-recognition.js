@@ -267,7 +267,10 @@ const faceRecognition = {
         this.locationUpdateInterval = setInterval(() => {
             const timeEl = document.getElementById('location-time');
             if (timeEl) {
-                timeEl.textContent = dateTime.normalizeTime(dateTime.getCurrentTime());
+                const now = new Date();
+                const hour = now.getHours().toString().padStart(2, '0');
+                const minute = now.getMinutes().toString().padStart(2, '0');
+                timeEl.textContent = `${hour}:${minute}`;
             }
         }, 1000);
     },
