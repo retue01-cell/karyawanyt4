@@ -23,7 +23,8 @@ function handleLogin(email, password) {
         name: user.name,
         email: user.email,
         role: user.role,
-        avatar: user.avatar
+        avatar: user.avatar,
+        readNotifs: user.readNotifs || '[]'
       }
     };
   }
@@ -51,7 +52,8 @@ function handleLogin(email, password) {
       department: employee.department || '',
       position: employee.position || '',
       shift: employee.shift || 'Pagi',
-      avatar: employee.avatar || ''
+      avatar: employee.avatar || '',
+      readNotifs: employee.readNotifs || '[]'
     }
   };
 }

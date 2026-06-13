@@ -42,8 +42,8 @@ function ensureSheetHasHeaders(sheetName, headers) {
 // ========== INIT DATABASE ==========
 function initDatabase() {
   const sheetsConfig = {
-    'Users': ['id', 'name', 'email', 'password', 'role', 'avatar', 'createdAt'],
-    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password', 'leaveBalance'],
+    'Users': ['id', 'name', 'email', 'password', 'role', 'avatar', 'createdAt', 'readNotifs'],
+    'Employees': ['id', 'name', 'email', 'department', 'position', 'shift', 'status', 'joinDate', 'avatar', 'password', 'leaveBalance', 'readNotifs'],
     'Attendance': ['id', 'userId', 'date', 'shift', 'clockIn', 'clockOut', 'breakStart', 'breakEnd', 'overtimeStart', 'status', 'verificationPhoto', 'verificationLocation', 'verificationTimestamp'],
     'Journals': ['id', 'userId', 'date', 'tasks', 'achievements', 'obstacles', 'plan', 'photo', 'updatedAt'],
     'Leaves': ['id', 'userId', 'type', 'typeLabel', 'startDate', 'endDate', 'duration', 'reason', 'status', 'appliedAt'],
