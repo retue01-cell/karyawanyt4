@@ -166,7 +166,7 @@ function handleRequest(e) {
         result = saveShiftScheduleItemData(data.userId, data.date, data.shift);
         break;
       case 'updateReadNotifs':
-        result = saveReadNotifs(data.userId, data.readNotifs);
+        result = saveReadNotifs(data.userId, data.readNotifs, data.role);
         break;
       case 'getApprovedLeavesForMonth':
         result = { success: true, data: getApprovedLeavesAndIzinForMonth(data.yearMonth) };
@@ -202,22 +202,27 @@ function sendResponse(data) {
  * Save read notifications status for a user
  * @param {string} userId - User ID
  * @param {string} readNotifsStr - JSON string of read notification IDs
+ * @param {string} role - User role ('admin' or 'employee')
  */
-function saveReadNotifs(userId, readNotifsStr) {
+function saveReadNotifs(userId, readNotifsStr, role) {
   if (!userId) {
     return { success: false, error: 'User ID is required' };
   }
   
-  // Try to update in Users sheet (Admin) first
-  let updated = updateRow('Users', userId, { readNotifs: readNotifsStr });
-  
-  // If failed, try Employees sheet (Karyawan)
-  if (!updated) {
-    updated = updateRow('Employees', userId, { readNotifs: readNotifsStr });
+  // Jika role-nya admin, HANYA UPDATE SISI PERMUKAAN USERS
+  if (role === 'admin') {
+    let updated = updateRow('Users', userId, { readNotifs: readNotifsStr });
+    if (updated) {
+      return { success: true, message: 'Status read notifications server diperbarui' };
+    }
+  } 
+  // Jika rolenya selain admin (karyawan), HANYA UPDATE SISI PERMUKAAN EMPLOYEES
+  else {
+    let updated = updateRow('Employees', userId, { readNotifs: readNotifsStr });
+    if (updated) {
+      return { success: true, message: 'Status read notifications server diperbarui' };
+    }
   }
   
-  if (updated) {
-    return { success: true, message: 'Status read notifications server diperbarui' };
-  }
   return { success: false, error: 'User tidak ditemukan' };
 }

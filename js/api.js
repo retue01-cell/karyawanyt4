@@ -50,9 +50,9 @@ const api = {
         if (!API_BASE_URL) return { success: false, error: 'Backend required' };
         return this.request('updateEmployeeEmail', { userId, newEmail, password });
     },
-    async updateReadNotifications(userId, readNotifIds) {
+    async updateReadNotifications(userId, readNotifIds, role) {
         if (!API_BASE_URL) return { success: true };
-        return this.request('updateReadNotifs', { userId, readNotifs: JSON.stringify(readNotifIds) });
+        return this.request('updateReadNotifs', { userId, role, readNotifs: JSON.stringify(readNotifIds) });
     },
     async updateEmployeeLeaveBalance(userId, leaveBalance) {
         if (!API_BASE_URL) return { success: false, error: 'Backend required' };
@@ -128,10 +128,6 @@ const api = {
     async getJournals(userId) {
         if (!API_BASE_URL) return { success: true, data: storage.get('jurnals', []) };
         return this.request('getJournals', { userId });
-    },
-    async updateReadNotifications(userId, readNotifIds) {
-        if (!API_BASE_URL) return { success: true };
-        return this.request('updateReadNotifs', { userId, readNotifs: JSON.stringify(readNotifIds) });
     },
     async saveJournal(data) {
         if (!API_BASE_URL) {
