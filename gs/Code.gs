@@ -165,6 +165,9 @@ function handleRequest(e) {
       case 'saveShiftScheduleItem':
         result = saveShiftScheduleItemData(data.userId, data.date, data.shift);
         break;
+      case 'updateReadNotifs':
+        result = saveReadNotifs(data.userId, data.readNotifs);
+        break;
       case 'getApprovedLeavesForMonth':
         result = { success: true, data: getApprovedLeavesAndIzinForMonth(data.yearMonth) };
         break;
@@ -193,4 +196,28 @@ function sendResponse(data) {
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
   return output;
+}
+
+/**
+ * Save read notifications status for a user
+ * @param {string} userId - User ID
+ * @param {string} readNotifsStr - JSON string of read notification IDs
+ */
+function saveReadNotifs(userId, readNotifsStr) {
+  if (!userId) {
+    return { success: false, error: 'User ID is required' };
+  }
+  
+  // Try to update in Users sheet (Admin) first
+  let updated = updateRow('Users', userId, { readNotifs: readNotifsStr });
+  
+  // If failed, try Employees sheet (Karyawan)
+  if (!updated) {
+    updated = updateRow('Employees', userId, { readNotifs: readNotifsStr });
+  }
+  
+  if (updated) {
+    return { success: true, message: 'Status read notifications server diperbarui' };
+  }
+  return { success: false, error: 'User tidak ditemukan' };
 }

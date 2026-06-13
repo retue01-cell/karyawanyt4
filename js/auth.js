@@ -70,8 +70,20 @@ const auth = {
 
         // Show loading
         const submitBtn = e.target.querySelector('.btn-login');
-        submitBtn.classList.add('loading');
         submitBtn.disabled = true;
+
+        // Tampilkan overlay loading di tengah layar
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) {
+            // Opsional: ubah teks loading-nya khusus untuk login
+            const textEl = loadingOverlay.querySelector('p');
+            if (textEl) textEl.textContent = 'Memproses Login...';
+            
+            // Pastikan background agak transparan agar layar belakang masih terlihat samar
+            loadingOverlay.style.background = 'rgba(0, 0, 0, 0.5)';
+            loadingOverlay.classList.add('active');
+            loadingOverlay.style.display = 'flex';
+        }
 
         try {
             const result = await api.login(email, password);
@@ -96,7 +108,8 @@ const auth = {
                     position: result.data.position || '',
                     shift: result.data.shift || '',
                     avatar: result.data.avatar || '',
-                    loginTime: new Date().toISOString()
+                    loginTime: new Date().toISOString(),
+                    readNotifs: result.data.readNotifs || '[]'
                 };
                 
                 // VALIDASI ROLE: Bandingkan role yang dipilih dengan role yang sudah dinormalisasi
@@ -157,8 +170,18 @@ const auth = {
             console.error('Login error:', error);
             toast.error('Terjadi kesalahan saat login');
         } finally {
-            submitBtn.classList.remove('loading');
             submitBtn.disabled = false;
+            
+            // Tutup dan sembunyikan overlay di tengah layar
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.remove('active');
+                loadingOverlay.style.display = 'none';
+                
+                // Opsional: Kembalikan teks asli untuk keperluan splash screen di lain waktu
+                const textEl = loadingOverlay.querySelector('p');
+                if (textEl) textEl.textContent = 'Memuat Identitas Portal...';
+            }
         }
     },
 
@@ -239,6 +262,11 @@ const auth = {
             if (window.mobile) {
                 window.mobile.handleResize();
             }
+
+            // Bangunkan notifikasi otomatis setelah login
+            if (window.notifications) {
+                window.notifications.init();
+            }
         }
     },
 
@@ -249,6 +277,9 @@ const auth = {
         if (loginContainer && appContainer) {
             appContainer.classList.add('hidden');
             loginContainer.style.display = 'flex';
+            
+            // TAMBAHKAN SATU BARIS INI:
+            loginContainer.style.opacity = '1';
 
             // Reset form
             const loginForm = document.getElementById('login-form');
@@ -386,15 +417,6 @@ const auth = {
         return this.currentUser;
     }
 };
-
-// Initialize auth on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-    auth.init();
-    // Apply login display settings on initial page load
-    if (window.applyLoginDisplaySettings) {
-        window.applyLoginDisplaySettings();
-    }
-});
 
 // Expose to global
 window.auth = auth;
